@@ -6,13 +6,13 @@ from src.plotting.plot_trajectories import plot_satellite_trajectories
 # ---------------------------
 # Sample Data Initialization
 # ---------------------------
-satellites = ["Sat1", "Sat2"]
+
 time_steps = list(range(20))
 dt = 20  # Time step (seconds)
 F_max = 500000  # Thrust (N)
 c_fuel = 0.00001
 m_i = 0.001  # Satellite mass (kg)
-d_safe = 100000  # Safe distance (meters)
+d_safe = 100# Safe distance (meters)
 M = 1e100  # Big-M constant
 
 initial_state = {
@@ -23,9 +23,13 @@ initial_state = {
     "Sat2": {
         "position": [15000, 20000, 0],
         "velocity": [1000, 1000, 0]
+    },
+    "Sat3": {
+        "position": [3000, 20000, 0],
+        "velocity": [1000, 900, 0]
     }
 }
-
+satellites = initial_state.keys()
 # ---------------------------
 # Helper Function with Velocity Initialization
 # ---------------------------

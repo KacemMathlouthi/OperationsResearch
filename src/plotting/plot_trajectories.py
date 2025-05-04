@@ -43,19 +43,8 @@ def plot_satellite_trajectories(model):
         
         ax.plot(x, y, z, marker='o', linestyle='-', label=sat)
         ax.text(x[-1], y[-1], z[-1], f'{sat} (end)', color='black')
-    # Print final positions and velocities
-    for sat in positions:
-        final_time = max(positions[sat].keys())
-        final_position = positions[sat][final_time]
-        print(f"Satellite: {sat}")
-        print(f"  Final Position (X, Y, Z): {final_position}")
-        if final_time > 0:
-            prev_position = positions[sat][final_time - 1]
-            velocity = [(final_position[i] - prev_position[i]) for i in range(3)]
-            print(f"  Approx. Velocity (X, Y, Z): {velocity}")
-        else:
-            print("  Velocity: Not available (only one time step)")
-
+    
+        
 
     ax.set_xlabel('X (m)')
     ax.set_ylabel('Y (m)')
