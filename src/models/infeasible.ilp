@@ -1,0 +1,24 @@
+\ Model SatelliteLP_WithTracking_copy
+\ LP format - for model browsing. Use MPS format to capture full model detail.
+Minimize
+ 
+Subject To
+ init_p_Sat1_1: p_Sat1_0[1] = 0
+ init_v_Sat1_1: v_Sat1_0[1] = 0
+ dyn_p_Sat1_0_1: - 0.0125 u_Sat1_0[1] - p_Sat1_0[1] + p_Sat1_1[1]
+   - 5 v_Sat1_0[1] = 0
+ init_p_Sat2_1: p_Sat2_0[1] = 1.732051
+ init_v_Sat2_1: v_Sat2_0[1] = -0.0866025
+ dyn_p_Sat2_0_1: - 0.0125 u_Sat2_0[1] - p_Sat2_0[1] + p_Sat2_1[1]
+   - 5 v_Sat2_0[1] = 0
+ con_dy_Sat1_Sat2_1: - p_Sat1_1[1] + p_Sat2_1[1] + dy_Sat1_Sat2_1 = 0
+Bounds
+ -infinity <= u_Sat1_0[1] <= 10
+ u_Sat2_0[1] >= -10
+ p_Sat1_0[1] free
+ p_Sat1_1[1] free
+ v_Sat1_0[1] free
+ p_Sat2_0[1] free
+ p_Sat2_1[1] free
+ v_Sat2_0[1] free
+End
