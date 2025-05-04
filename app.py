@@ -4,24 +4,22 @@ import os
 from ui.gradio_sections import (
     project_info_tab,
     production_planning_tab,
-    staff_scheduling_tab
+    staff_scheduling_tab,
 )
-from models.gurobi_models import (
-    mock_solve_pl,
-    mock_solve_plne
-)
+from models.gurobi_models import mock_solve_pl, mock_solve_plne
 
 # Mock Data
-mock_pl_df = pd.DataFrame({
-    "Product": ["A", "B", "C"],
-    "Profit/Unit": [10, 20, 15],
-    "Resource Usage": [3, 5, 2]
-})
+mock_pl_df = pd.DataFrame(
+    {
+        "Product": ["A", "B", "C"],
+        "Profit/Unit": [10, 20, 15],
+        "Resource Usage": [3, 5, 2],
+    }
+)
 
-mock_plne_df = pd.DataFrame({
-    "Employee": ["Alice", "Bob", "Charlie"],
-    "Availability": ["Yes", "Yes", "No"]
-})
+mock_plne_df = pd.DataFrame(
+    {"Employee": ["Alice", "Bob", "Charlie"], "Availability": ["Yes", "Yes", "No"]}
+)
 
 # Descriptions
 pl_description = """
@@ -39,7 +37,8 @@ favicon_path = os.path.join(os.path.dirname(__file__), "assets", "favicon.ico")
 
 # Assemble UI
 with gr.Blocks(title="Operations Research App") as ro_app:
-    gr.Markdown("""
+    gr.Markdown(
+        """
     <div style="display: flex; align-items: center; gap: 20px;">
         <img src="https://insat.rnu.tn/assets/images/logo_c.png" width="100">
         <div>
@@ -47,7 +46,8 @@ with gr.Blocks(title="Operations Research App") as ro_app:
             <p style="margin-top: 0; font-size: 14px; color: gray;">Choose the convenient tab to solve a problem</p>
         </div>
     </div>
-    """)
+    """
+    )
     with gr.Tabs():
         project_info_tab()
         production_planning_tab(mock_pl_df, mock_solve_pl, pl_description)
