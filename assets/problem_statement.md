@@ -49,9 +49,9 @@ A constellation of $N$ satellites must adjust their trajectories over $T$ time s
 
 ### **Objective Function**
 **Minimize total propellant expenditure**:
-$$
+$
 \text{Minimize } \sum_{i \in \mathcal{S}} \sum_{t=0}^{T-2} \delta_{i,t}
-$$
+$
 where $\delta_{i,t} \geq c_{\text{fuel}} \cdot \sum_{a \in \mathcal{A}} |u_{i,t}^a|$
 
 ---
@@ -59,31 +59,37 @@ where $\delta_{i,t} \geq c_{\text{fuel}} \cdot \sum_{a \in \mathcal{A}} |u_{i,t}
 ### **Core Constraints**
 
 #### **1. Orbital Dynamics**
-For $\forall i \in \mathcal{S}$, $t \in \{0,...,T-2\}$, $a \in \mathcal{A}$:
-$$
-p_{i,t+1}^a = p_{i,t}^a + v_{i,t}^a \Delta t + \frac{\Delta t^2}{2m_i} u_{i,t}^a 
-$$
-$$
-v_{i,t+1}^a = v_{i,t}^a + \frac{\Delta t}{m_i} u_{i,t}^a 
-$$
 
-#### **2. Collision Avoidance**
-For $\forall i \neq j \in \mathcal{S}$, $t \in \mathcal{T} \setminus \{0\}$, $a \in \mathcal{A}$:
-$$
-|p_{i,t}^a - p_{j,t}^a| \geq d_{\text{safe}} \cdot b_{ij,t}^a 
-$$
-$$
-\sum_{a \in \mathcal{A}} b_{ij,t}^a \geq 1 
-$$
+```math
+\forall i \in \mathcal{S},\ t \in \{0, \dots, T-2\},\ a \in \mathcal{A}:
+```
 
-#### **3. Operational Limits**
-$$
-p_{i,0}^a = p_{i,\text{init}}^a, \quad v_{i,0}^a = v_{i,\text{init}}^a \quad (\text{Initial conditions})
-$$
-$$
-|u_{i,t}^a| \leq F_{\text{max}} \quad (\text{Thrust bounds})
-$$
+```math
+p_{i,t+1}^a = p_{i,t}^a + v_{i,t}^a \Delta t + \frac{\Delta t^2}{2m_i} u_{i,t}^a \\
+v_{i,t+1}^a = v_{i,t}^a + \frac{\Delta t}{m_i} u_{i,t}^a
+```
 
+---
+
+### 2. Collision Avoidance
+
+```math
+\forall i \neq j \in \mathcal{S},\ t \in \mathcal{T} \setminus \{0\},\ a \in \mathcal{A}:
+```
+
+```math
+|p_{i,t}^a - p_{j,t}^a| \geq d_{\text{safe}} \cdot b_{ij,t}^a \\
+\sum_{a \in \mathcal{A}} b_{ij,t}^a \geq 1
+```
+
+---
+
+### 3. Operational Limits
+
+```math
+p_{i,0}^a = p_{i,\text{init}}^a,\quad v_{i,0}^a = v_{i,\text{init}}^a \quad \text{(Initial conditions)} \\
+|u_{i,t}^a| \leq F_{\text{max}} \quad \text{(Thrust bounds)}
+```
 ---
 
 ## Implementation Framework
