@@ -1,6 +1,7 @@
 aiofiles==24.1.0
 annotated-types==0.7.0
 anyio==4.9.0
+black==25.1.0
 certifi==2025.4.26
 charset-normalizer==3.4.2
 click==8.1.8
@@ -14,6 +15,7 @@ fsspec==2025.3.2
 gradio==5.29.0
 gradio_client==1.10.0
 groovy==0.1.2
+gurobipy==12.0.1
 h11==0.16.0
 httpcore==1.0.9
 httpx==0.28.1
@@ -25,11 +27,14 @@ markdown-it-py==3.0.0
 MarkupSafe==3.0.2
 matplotlib==3.10.1
 mdurl==0.1.2
+mypy_extensions==1.1.0
 numpy==2.2.5
 orjson==3.10.18
 packaging==25.0
 pandas==2.2.3
+pathspec==0.12.1
 pillow==11.2.1
+platformdirs==4.3.7
 pydantic==2.11.4
 pydantic_core==2.33.2
 pydub==0.25.1

@@ -37,21 +37,53 @@ def project_info_tab():
         )
 
 
-def production_planning_tab(mock_pl_df, mock_solve_pl, pl_description):
+def production_planning_tab(mock_pl_df, solve_pl_gurobi, pl_description):
     with gr.Tab("🏭 Production Planning (PL)"):
         gr.Markdown(pl_description)
+
+        # Add mathematical model description
+        gr.Markdown(
+            r"""
+            ### 🧮 Mathematical Formulation
+
+            Let:  
+            | Symbol      | Description                             |
+            |-------------|-----------------------------------------|
+            | $$x_i$$       | Number of units to produce for product i |
+            | $$p_i$$       | Profit per unit for product i         |
+            | $$r_i$$       | Resource usage per unit for product i |
+            | $$R$$         | Total resource available              |
+
+            **Objective:**  
+            $$
+            \text{Maximise} \quad \sum_i p_i \cdot x_i
+            $$
+
+            **Constraint:**  
+            $$
+            \sum_i r_i \cdot x_i \leq R \quad \text{and} \quad x_i \geq 0
+            $$
+            """
+        )
+
         with gr.Row():
             input_pl = gr.Dataframe(
                 headers=["Product", "Profit/Unit", "Resource Usage"],
                 value=mock_pl_df,
                 label="Input Product Data",
             )
+        total_resource_input = gr.Number(
+            value=100, label="Total Resource Available (R)"
+        )
         solve_btn_pl = gr.Button("Solve Production Problem")
-        result_table_pl = gr.Dataframe(label="Optimised Result (Mock)")
+
+        result_table_pl = gr.Dataframe(label="Optimised Result")
         result_plot_pl = gr.Plot(label="Visualisation")
 
         solve_btn_pl.click(
-            fn=mock_solve_pl, inputs=input_pl, outputs=[result_table_pl, result_plot_pl]
+            fn=lambda df, R: solve_pl_gurobi(df, total_resource=R),
+            inputs=[input_pl, total_resource_input],
+            outputs=[result_table_pl, result_plot_pl]
         )
 
 

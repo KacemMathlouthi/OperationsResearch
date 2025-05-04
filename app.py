@@ -6,10 +6,10 @@ from ui.gradio_sections import (
     production_planning_tab,
     staff_scheduling_tab,
 )
-from models.gurobi_models import mock_solve_pl, mock_solve_plne
+from models.gurobi_models import solve_pl, mock_solve_plne
 
 # Mock Data
-mock_pl_df = pd.DataFrame(
+pl_df = pd.DataFrame(
     {
         "Product": ["A", "B", "C"],
         "Profit/Unit": [10, 20, 15],
@@ -50,7 +50,7 @@ with gr.Blocks(title="Operations Research App") as ro_app:
     )
     with gr.Tabs():
         project_info_tab()
-        production_planning_tab(mock_pl_df, mock_solve_pl, pl_description)
+        production_planning_tab(pl_df, solve_pl, pl_description)
         staff_scheduling_tab(mock_plne_df, mock_solve_plne, plne_description)
 
 if __name__ == "__main__":
