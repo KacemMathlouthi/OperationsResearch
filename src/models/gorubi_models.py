@@ -12,7 +12,7 @@ dt = 20  # Time step (seconds)
 F_max = 500000  # Thrust (N)
 c_fuel = 0.00001
 m_i = 0.001  # Satellite mass (kg)
-d_safe = 100# Safe distance (meters)
+d_safe = 1000# Safe distance (meters)
 M = 1e100  # Big-M constant
 
 initial_state = {
