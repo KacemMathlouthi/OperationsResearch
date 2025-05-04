@@ -1,0 +1,15 @@
+\ Model SatelliteLP_copy
+\ LP format - for model browsing. Use MPS format to capture full model detail.
+Minimize
+ 
+Subject To
+ R12: p_Sat1_0[0] = 1000
+ R27: p_Sat2_0[0] = 15000
+ sep_x_positive_Sat1_Sat2_0: p_Sat1_0[0] - p_Sat2_0[0]
+   - 1000 b_Sat1_Sat2_0_x >= 4000
+Bounds
+ p_Sat1_0[0] free
+ p_Sat2_0[0] free
+Binaries
+ b_Sat1_Sat2_0_x
+End

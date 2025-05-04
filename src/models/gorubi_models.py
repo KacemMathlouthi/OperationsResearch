@@ -2,41 +2,45 @@ import gurobipy as gp
 from gurobipy import GRB
 import numpy as np
 from itertools import combinations
-
+from src.plotting.plot_trajectories import plot_satellite_trajectories
 # ---------------------------
 # Sample Data Initialization
 # ---------------------------
+# Adjusted parameters
 satellites = ["Sat1", "Sat2"]
-debris = ["Deb1"]
-time_steps = list(range(3))  # T=0,1,2
-dt = 10  # Time step duration (seconds)
-F_max = 500  # Max thrust (N)
+time_steps = [0, 1, 2]
+dt = 10  # Time step (seconds)
+F_max = 5000  # Increased thrust (N)
+c_fuel = 0.001
 m_i = 1000  # Satellite mass (kg)
-d_safe = 10000  # 10 km safety distance (meters)
-c_fuel = 0.01  # Fuel cost (kg/N)
-M = 1e6  # Big-M value
+d_safe = 5000  # Reduced safe distance (meters)
+M = 1e3  # Large-M value (adjust based on position bounds)
+
+# Initial positions with sufficient separation
+initial_position = {
+    "Sat1": [1000, 2000, 3000],
+    "Sat2": [15000, 20000, 25000],
+    "Deb1": [10000, 10000, 10000]  # Far from both satellites
+}
+
 
 # Initial positions and velocities (3D: x,y,z)
 initial_state = {
     "Sat1": {
-        "position": [100000, 0, 0],
-        "velocity": [0, 7660, 0]  # ~Low Earth Orbit velocity
+        "position": [1000, 2000, 3000],
+        "velocity": [0, 60, 0]  # ~Low Earth Orbit velocity
     },
     "Sat2": {
-        "position": [0, 100000, 0],
-        "velocity": [0, 7660, 0]
+        "position": [15000, 20000, 25000],
+        "velocity": [0, 70, 0]
     },
     "Deb1": {
-        "position": [50000, 50000, 0],
-        "velocity": [0, 7660, 0]
+        "position": [10000, 10000, 10000],
+        "velocity": [0, 76, 0]
     }
 }
 
-initial_position = {
-    "Sat1": initial_state["Sat1"]["position"],  # x, y, z in meters
-    "Sat2": initial_state["Sat2"]["position"],  # x, y, z in meters
-    "Deb1": initial_state["Deb1"]["position"]  # x, y, z in meters
-}
+
 # ---------------------------
 # Common Helper Functions
 # ---------------------------
@@ -99,25 +103,91 @@ def solve_lp_model():
         positions[sat] = p
         velocities[sat] = v
     
-    # Collision Avoidance Constraints
     for t in time_steps:
-        # Satellite-to-satellite
+        # --------------------------------------------
+        # Satellite-to-Satellite Collision Avoidance
+        # --------------------------------------------
         for (i, j) in combinations(satellites, 2):
-            for coord in range(3):
-                sep = model.addVar(lb=d_safe/3, name=f"sep_{i}_{j}_{t}_{coord}")
-                model.addConstr(
-                    sep == positions[i][t][coord] - positions[j][t][coord]
-                )
-        
-        # Satellite-to-debris
+            # Binary variables for each coordinate
+            b_x = model.addVar(vtype=GRB.BINARY, name=f"b_{i}_{j}_{t}_x")
+            b_y = model.addVar(vtype=GRB.BINARY, name=f"b_{i}_{j}_{t}_y")
+            b_z = model.addVar(vtype=GRB.BINARY, name=f"b_{i}_{j}_{t}_z")
+            
+            # X-coordinate separation (either direction >= d_safe)
+            model.addConstr(
+                positions[i][t][0] - positions[j][t][0] >= d_safe - M * (1 - b_x),
+                name=f"sep_x_positive_{i}_{j}_{t}"
+            )
+            model.addConstr(
+                positions[j][t][0] - positions[i][t][0] >= d_safe - M * (1 - b_x),
+                name=f"sep_x_negative_{i}_{j}_{t}"
+            )
+            
+            # Y-coordinate separation
+            model.addConstr(
+                positions[i][t][1] - positions[j][t][1] >= d_safe - M * (1 - b_y),
+                name=f"sep_y_positive_{i}_{j}_{t}"
+            )
+            model.addConstr(
+                positions[j][t][1] - positions[i][t][1] >= d_safe - M * (1 - b_y),
+                name=f"sep_y_negative_{i}_{j}_{t}"
+            )
+            
+            # Z-coordinate separation
+            model.addConstr(
+                positions[i][t][2] - positions[j][t][2] >= d_safe - M * (1 - b_z),
+                name=f"sep_z_positive_{i}_{j}_{t}"
+            )
+            model.addConstr(
+                positions[j][t][2] - positions[i][t][2] >= d_safe - M * (1 - b_z),
+                name=f"sep_z_negative_{i}_{j}_{t}"
+            )
+            
+            # At least one coordinate must satisfy separation
+            model.addConstr(b_x + b_y + b_z >= 1, name=f"sep_logic_{i}_{j}_{t}")
+
+        # --------------------------------------------
+        # Satellite-to-Debris Collision Avoidance
+        # --------------------------------------------
+        deb1_pos = initial_position["Deb1"]  # Use consistent initial position
         for sat in satellites:
-            for coord in range(3):
-                sep = model.addVar(lb=d_safe/3, name=f"sep_{sat}_Deb1_{t}_{coord}")
-                model.addConstr(
-                    sep == positions[sat][t][coord] - initial_state["Deb1"]["position"][coord]
-                )
-                model.addConstr(sep >= d_safe/3)
-    
+            # Binary variables for each coordinate
+            b_x = model.addVar(vtype=GRB.BINARY, name=f"b_{sat}_Deb1_{t}_x")
+            b_y = model.addVar(vtype=GRB.BINARY, name=f"b_{sat}_Deb1_{t}_y")
+            b_z = model.addVar(vtype=GRB.BINARY, name=f"b_{sat}_Deb1_{t}_z")
+            
+            # X-coordinate separation
+            model.addConstr(
+                positions[sat][t][0] - deb1_pos[0] >= d_safe - M * (1 - b_x),
+                name=f"sep_x_positive_{sat}_Deb1_{t}"
+            )
+            model.addConstr(
+                deb1_pos[0] - positions[sat][t][0] >= d_safe - M * (1 - b_x),
+                name=f"sep_x_negative_{sat}_Deb1_{t}"
+            )
+            
+            # Y-coordinate separation
+            model.addConstr(
+                positions[sat][t][1] - deb1_pos[1] >= d_safe - M * (1 - b_y),
+                name=f"sep_y_positive_{sat}_Deb1_{t}"
+            )
+            model.addConstr(
+                deb1_pos[1] - positions[sat][t][1] >= d_safe - M * (1 - b_y),
+                name=f"sep_y_negative_{sat}_Deb1_{t}"
+            )
+            
+            # Z-coordinate separation
+            model.addConstr(
+                positions[sat][t][2] - deb1_pos[2] >= d_safe - M * (1 - b_z),
+                name=f"sep_z_positive_{sat}_Deb1_{t}"
+            )
+            model.addConstr(
+                deb1_pos[2] - positions[sat][t][2] >= d_safe - M * (1 - b_z),
+                name=f"sep_z_negative_{sat}_Deb1_{t}"
+            )
+            
+            model.addConstr(b_x + b_y + b_z >= 1, name=f"sep_logic_{sat}_Deb1_{t}")
+        
     # Objective: Minimize total fuel
     model.setObjective(
         gp.quicksum(delta[sat, t] for sat in satellites for t in time_steps[:-1]),
@@ -130,88 +200,16 @@ def solve_lp_model():
     if model.status == GRB.OPTIMAL:
         print("\nLP Optimal Solution Found")
         print(f"Total Fuel: {model.ObjVal:.2f} kg")
-        # Add code to extract positions/thrust vectors
+        plot_satellite_trajectories(model)
     else:
+        model.computeIIS()
+        model.write("infeasible.ilp")
+        print("Model is infeasible. Check 'infeasible.ilp'.")
         print("No LP solution found")
 
-# # ---------------------------
-# # MILP Model (Pulsed Thrust)
-# # ---------------------------
-# def solve_milp_model():
-#     model = gp.Model("SatelliteMILP")
-    
-#     # Decision Variables
-#     u = {}  # Thrust vectors
-#     z = {}  # Thruster activation binaries
-#     delta = {}  # Fuel consumption
-    
-#     for sat in satellites:
-#         for t in time_steps[:-1]:  # No thrust at final step
-#             # Thruster activation binary
-#             z[sat, t] = model.addVar(
-#                 vtype=GRB.BINARY, 
-#                 name=f"z_{sat}_{t}"
-#             )
-            
-#             # Thrust vector components (-F_max*z to F_max*z)
-#             u[sat, t] = model.addVars(
-#                 3, 
-#                 lb=-F_max*z[sat, t], 
-#                 ub=F_max*z[sat, t], 
-#                 name=f"u_{sat}_{t}"
-#             )
-            
-#             # Fuel consumption (big-M constraints)
-#             delta[sat, t] = model.addVar(name=f"delta_{sat}_{t}")
-#             for coord in range(3):
-#                 abs_u = model.addVar(name=f"abs_u_{sat}_{t}_{coord}")
-#                 model.addGenConstrAbs(abs_u, u[sat, t][coord])
-#                 model.addConstr(
-#                     delta[sat, t] >= c_fuel * abs_u - M*(1 - z[sat, t])
-#                 )
-#                 model.addConstr(
-#                     delta[sat, t] <= M * z[sat, t]
-#                 )
-    
-#     # Add orbital dynamics and position variables
-#     positions = {}
-#     for sat in satellites:
-#         p, v = add_orbital_dynamics(model, sat, time_steps, dt, m_i)
-#         positions[sat] = p
-    
-#     # Collision Avoidance Constraints (same as LP)
-#     # ... [Identical to LP version] ...
-    
-#     # Additional Constraints: Max 2 activations per satellite
-#     for sat in satellites:
-#         model.addConstr(
-#             gp.quicksum(z[sat, t] for t in time_steps[:-1]) <= 2,
-#             name=f"max_activations_{sat}"
-#         )
-    
-#     # Objective: Minimize total fuel
-#     model.setObjective(
-#         gp.quicksum(delta[sat, t] for sat in satellites for t in time_steps[:-1]),
-#         GRB.MINIMIZE
-#     )
-    
-#     # Solve and print results
-#     model.Params.TimeLimit = 300  # 5 minutes
-#     model.optimize()
-    
-#     if model.status == GRB.OPTIMAL:
-#         print("\nMILP Optimal Solution Found")
-#         print(f"Total Fuel: {model.ObjVal:.2f} kg")
-#         # Add code to extract activation patterns
-#     else:
-#         print("No MILP solution found")
 
-# ---------------------------
-# Run Both Models
-# ---------------------------
+
 if __name__ == "__main__":
     print("Solving LP Model...")
     solve_lp_model()
     
-    # print("\nSolving MILP Model...")
-    # solve_milp_model()
