@@ -51,6 +51,7 @@ def plot_satellite_trajectories(model):
             ux, uy, uz = thrusts.get(sat, {}).get(t, [0,0,0])
             # scale factor for visibility
             scale = 10
+            print(f"Thrust at {sat} at time {t}: {ux}, {uy}, {uz}")
             ax.quiver(px, py, pz, ux*scale, uy*scale, uz*scale, length=1.0, normalize=False)
 
     ax.set_xlabel('X (m)')

@@ -7,25 +7,25 @@ from src.plotting.plot_trajectories import plot_satellite_trajectories
 # Sample Data Initialization
 # ---------------------------
 
-time_steps = list(range(20))
+time_steps = list(range(30))
 dt = 10  # Time step (seconds)
 F_max = 500000  # Thrust (N)
 c_fuel = 0.00001
-m_i = 0.001  # Satellite mass (kg)
+m_i = 0.01  # Satellite mass (kg)
 d_safe = 1000000# Safe distance (meters)
 M = 1e100  # Big-M constant
 
 initial_state = {
     "Sat1": {
-        "position": [1000, 2000, 0],
-        "velocity": [1000, 0 , 0]
+        "position": [14000, 2000, 0],
+        "velocity": [1000, 1000 , 0]
     },
     "Sat2": {
         "position": [15000, 20000, 0],
         "velocity": [1000, 1000, 0]
     },
     "Sat3": {
-        "position": [3000, 20000, 0],
+        "position": [15000, 20010, 0],
         "velocity": [1000, 950, 0]
     }
 }
