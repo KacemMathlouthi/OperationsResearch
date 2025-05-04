@@ -5,16 +5,11 @@ import base64
 def project_info_tab():
     with gr.Tab("📘 Project Info"):
         gr.Markdown("""
-        <div style="display: flex; align-items: center; gap: 20px;">
-            <img src="https://insat.rnu.tn/assets/images/logo_c.png" width="100">
-            <h2>Operations Research Optimisation App</h2>
-        </div>
-
-        ### 🎓 GL3 - 2025 - Operational Research Project
-
+        # 🎓 GL3 - 2025 - Operational Research Project
         This application demonstrates how **Linear Programming (PL)** and **Mixed-Integer Linear Programming (PLNE)** can be applied to solve real-world optimisation problems using **Gurobi**.
+        
         ---
-        ## 👥 Project Members
+        # 👥 Project Members
         - **Kacem Mathlouthi** — GL3/2  
         - **Mohamed Amine Houas** — GL3/1  
         - **Oussema Kraiem** — GL3/2  
@@ -23,10 +18,10 @@ def project_info_tab():
         - **Youssef Aaridhi** — GL3/2  
         - **Achref Ben Ammar** — GL3/1  
         ---
-        ## 🧾 Compte Rendu
+        # 🧾 Compte Rendu
         """)
         # Read and encode the PDF - go up one directory to find assets at project root
-        pdf_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "docs", "compte_rendu.pdf")
+        pdf_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "assets", "compte_rendu.pdf")
         with open(pdf_path, "rb") as pdf_file:
             encoded_pdf = base64.b64encode(pdf_file.read()).decode('utf-8')
 
