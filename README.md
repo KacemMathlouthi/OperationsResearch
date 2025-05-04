@@ -4,7 +4,7 @@
 
 A web-based interface for optimizing satellite trajectories to prevent collisions while minimizing fuel consumption. Built with Python/Gurobi for optimization and Three.js for 3D visualization.
 
-![App Screenshot](./assets/sat-cap.png)
+![App Screenshot](./assets/satellite_trajectories.gif)
 
 ### Fuel Minimization Objective
 ```math
