@@ -78,12 +78,17 @@ def production_planning_tab(mock_pl_df, solve_pl_gurobi, pl_description):
         solve_btn_pl = gr.Button("Solve Production Problem")
 
         result_table_pl = gr.Dataframe(label="Optimised Result")
-        result_plot_pl = gr.Plot(label="Visualisation")
+        
+        # Create plot output placeholders
+        result_plot_combined = gr.Plot(label="Data Visualisation")
 
         solve_btn_pl.click(
             fn=lambda df, R: solve_pl_gurobi(df, total_resource=R),
             inputs=[input_pl, total_resource_input],
-            outputs=[result_table_pl, result_plot_pl]
+            outputs=[
+                result_table_pl,
+                result_plot_combined,
+            ]
         )
 
 
