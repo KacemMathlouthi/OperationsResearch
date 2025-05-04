@@ -3,6 +3,10 @@
 Minimize
  
 Subject To
- R262: v_Sat1_0[0] = -100
+ R263: p_Sat1_0[1] = 0
+ R443: p_Sat2_0[1] = 1.732051
+ R802: - p_Sat1_0[1] + p_Sat2_0[1] + dy_Sat1_Sat2_0 = 0
 Bounds
+ p_Sat1_0[1] free
+ p_Sat2_0[1] free
 End
