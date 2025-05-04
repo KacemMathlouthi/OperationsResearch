@@ -1,200 +1,162 @@
-# Optimization Model for Satellite Collision Avoidance and Fuel Minimization Using Gurobi
+
+# Satellite Collision Avoidance as a Mixed-Integer Linear Programming Problem
 
 ## Problem Statement
-A constellation of satellites must adjust their trajectories to avoid collisions with space debris or other satellites while minimizing fuel consumption. The goal is to determine **optimal thrust maneuvers** (continuous or pulsed) to ensure safe separation and minimize fuel usage.
+A constellation of \( N \) satellites must adjust their trajectories over \( T \) time steps to:
+1. Maintain safe separation \( \geq d_{\text{safe}} \) at all times after initial positioning
+2. Minimize fuel consumption using continuous thrust control
+3. Obey orbital dynamics with realistic thrust limits
+
+**Key Features**:
+- Mixed-Integer Linear Programming (MILP) formulation
+- Axis-wise collision avoidance constraints
+- Configurable temporal resolution and safety margins
+- Scalable to arbitrary satellite formations
 
 ---
 
 ## Mathematical Formulation
 
 ### **Sets and Indices**
-- \( \mathcal{S} \): Set of satellites, indexed by \( i, j \).
-- \( \mathcal{T} \): Set of time steps, indexed by \( t \).
-- \( \mathcal{D} \): Set of debris objects, indexed by \( k \).
+- \( \mathcal{S} = \{1,...,N\} \): Set of satellites
+- \( \mathcal{T} = \{0,...,T-1\} \): Discrete time steps
+- \( \mathcal{A} = \{x,y,z\} \): Coordinate axes
 
 ---
 
-### **Parameters**
+### **System Parameters**
 | Symbol | Description |
 |--------|-------------|
-| \( \mathbf{p}_{i,t}^\text{init} \) | Initial position of satellite \( i \) at time \( t \) (3D vector). |
-| \( \mathbf{v}_{i,t}^\text{init} \) | Initial velocity of satellite \( i \) at time \( t \) (3D vector). |
-| \( \Delta t \) | Duration of each time step. |
-| \( d_\text{safe} \) | Minimum safe distance between satellites/debris (e.g., 10 km). |
-| \( m_i \) | Mass of satellite \( i \). |
-| \( F_\text{max} \) | Maximum thrust force (N). |
-| \( c_\text{fuel} \) | Fuel cost per unit thrust (kg/N). |
+| \( \Delta t \) | Time step duration |
+| \( D_{\text{unit}} \) | Distance scaling factor |
+| \( F_{\text{max}} \) | Maximum thrust magnitude |
+| \( d_{\text{safe}} \) | Minimum safety distance |
+| \( m_i \) | Satellite mass (\( \forall i \in \mathcal{S} \)) |
+| \( c_{\text{fuel}} \) | Fuel cost coefficient |
 
 ---
 
-### **Variables**
-#### **For Continuous Thrust (LP Model)**
-| Variable | Description | Type |
-|----------|-------------|------|
-| \( \mathbf{u}_{i,t} \) | Thrust vector applied to satellite \( i \) at time \( t \) (3D). | Continuous |
-| \( \delta_{i,t} \) | Fuel consumed by satellite \( i \) at time \( t \). | Continuous |
-
-#### **For Pulsed Thrust (MILP Model)**
-| Variable | Description | Type |
-|----------|-------------|------|
-| \( z_{i,t} \) | Binary decision to activate thrusters for satellite \( i \) at time \( t \). | Binary |
-| \( \mathbf{u}_{i,t} \) | Thrust vector (nonzero only if \( z_{i,t} = 1 \)). | Continuous |
+### **Decision Variables**
+| Variable | Description | Type | Domain |
+|----------|-------------|------|--------|
+| \( p_{i,t}^a \) | Position of satellite \( i \) at \( t \) | Continuous | \( \mathbb{R} \) |
+| \( v_{i,t}^a \) | Velocity of satellite \( i \) at \( t \) | Continuous | \( \mathbb{R} \) |
+| \( u_{i,t}^a \) | Thrust component for satellite \( i \) at \( t \) | Continuous | \( [-F_{\text{max}}, F_{\text{max}}] \) |
+| \( \delta_{i,t} \) | Fuel consumption proxy | Continuous | \( \mathbb{R}^+ \) |
+| \( b_{ij,t}^a \) | Separation axis activation | Binary | \( \{0,1\} \) |
 
 ---
 
 ### **Objective Function**
-**Minimize total fuel consumption**:
+**Minimize total propellant expenditure**:
 \[
-\text{Minimize } \sum_{i \in \mathcal{S}} \sum_{t \in \mathcal{T}} \delta_{i,t}
+\text{Minimize } \sum_{i \in \mathcal{S}} \sum_{t=0}^{T-2} \delta_{i,t}
 \]
-- For LP: \( \delta_{i,t} = c_\text{fuel} \cdot \|\mathbf{u}_{i,t}\| \).  
-- For MILP: \( \delta_{i,t} = c_\text{fuel} \cdot z_{i,t} \cdot \|\mathbf{u}_{i,t}\| \).  
+where \( \delta_{i,t} \geq c_{\text{fuel}} \cdot \sum_{a \in \mathcal{A}} |u_{i,t}^a| \)
 
 ---
 
-### **Constraints**
-#### **1. Orbital Dynamics (Simplified via Hill’s Equations)**
-The relative motion of satellites is modeled using linearized Clohessy-Wiltshire (Hill’s) equations:
+### **Core Constraints**
+
+#### **1. Orbital Dynamics**
+For \( \forall i \in \mathcal{S} \), \( t \in \{0,...,T-2\} \), \( a \in \mathcal{A} \):
 \[
-\mathbf{p}_{i,t+1} = \mathbf{p}_{i,t} + \mathbf{v}_{i,t} \Delta t + \frac{1}{2} \mathbf{a}_{i,t} (\Delta t)^2
+p_{i,t+1}^a = p_{i,t}^a + v_{i,t}^a \Delta t + \frac{\Delta t^2}{2m_i} u_{i,t}^a 
 \]
 \[
-\mathbf{v}_{i,t+1} = \mathbf{v}_{i,t} + \mathbf{a}_{i,t} \Delta t
+v_{i,t+1}^a = v_{i,t}^a + \frac{\Delta t}{m_i} u_{i,t}^a 
 \]
-where \( \mathbf{a}_{i,t} = \frac{\mathbf{u}_{i,t}}{m_i} \) is the acceleration due to thrust.
 
 #### **2. Collision Avoidance**
-For all \( i, j \in \mathcal{S}, t \in \mathcal{T} \):
+For \( \forall i \neq j \in \mathcal{S} \), \( t \in \mathcal{T} \setminus \{0\} \), \( a \in \mathcal{A} \):
 \[
-\|\mathbf{p}_{i,t} - \mathbf{p}_{j,t}\| \geq d_\text{safe}
+|p_{i,t}^a - p_{j,t}^a| \geq d_{\text{safe}} \cdot b_{ij,t}^a 
 \]
-For debris \( k \in \mathcal{D} \):
 \[
-\|\mathbf{p}_{i,t} - \mathbf{p}_{k,t}^\text{debris}\| \geq d_\text{safe}
+\sum_{a \in \mathcal{A}} b_{ij,t}^a \geq 1 
 \]
 
-#### **3. Thrust Limits**
-- **LP**: \( \|\mathbf{u}_{i,t}\| \leq F_\text{max} \).  
-- **MILP**: \( \|\mathbf{u}_{i,t}\| \leq F_\text{max} \cdot z_{i,t} \).  
-
-#### **4. Fuel Consumption (MILP Only)**
+#### **3. Operational Limits**
 \[
-\delta_{i,t} \geq c_\text{fuel} \cdot \|\mathbf{u}_{i,t}\| - M (1 - z_{i,t})
+p_{i,0}^a = p_{i,\text{init}}^a, \quad v_{i,0}^a = v_{i,\text{init}}^a \quad (\text{Initial conditions})
 \]
 \[
-\delta_{i,t} \leq M \cdot z_{i,t}
+|u_{i,t}^a| \leq F_{\text{max}} \quad (\text{Thrust bounds})
 \]
-where \( M \) is a large constant (big-M method).
 
 ---
 
-## Solution with Gurobi
+## Implementation Framework
 
-### **Step 1: Model Initialization**
+### **Model Configuration**
 ```python
-import gurobipy as gp
-from gurobipy import GRB
+# Time parameters
+T = 30  # Number of time steps
+dt = 1.0  # Temporal resolution
 
-# Initialize model
-model = gp.Model("SatelliteCollisionAvoidance")
+# Physical parameters
+F_max = 100.0  # Maximum thrust
+d_safe = 1e-5  # Safety distance
+masses = {i: 10.0 for i in satellites}  # Satellite masses
 ```
 
-### **Step 2: Define Variables**
-#### **LP Model (Continuous Thrust)**
+### **Adaptive Variable Creation**
 ```python
-# Thrust vectors (3D: x, y, z)
-u = {}
-for i in satellites:
-    for t in time_steps:
-        u[i, t] = model.addVars(3, lb=-F_max, ub=F_max, name=f"u_{i}_{t}")
-
-# Fuel consumption (linearized)
-delta = model.addVars(satellites, time_steps, name="delta")
+def create_dynamics_vars(model, satellites, time_steps):
+    pos = {(i,t,a): model.addVar(name=f"p_{i}_{t}_{a}") 
+          for i in satellites for t in time_steps for a in 'xyz'}
+    vel = {(i,t,a): model.addVar(name=f"v_{i}_{t}_{a}") 
+          for i in satellites for t in time_steps for a in 'xyz'}
+    return pos, vel
 ```
 
-#### **MILP Model (Pulsed Thrust)**
+### **Configurable Safety Constraints**
 ```python
-# Binary activation variables
-z = model.addVars(satellites, time_steps, vtype=GRB.BINARY, name="z")
-
-# Thrust vectors (nonzero only if z=1)
-u = {}
-for i in satellites:
-    for t in time_steps:
-        u[i, t] = model.addVars(3, lb=-F_max*z[i,t], ub=F_max*z[i,t], name=f"u_{i}_{t}")
-```
-
-### **Step 3: Add Constraints**
-#### **Orbital Dynamics**
-```python
-# Simplified linear motion constraints (Hill’s equations)
-for i in satellites:
-    for t in time_steps[:-1]:
-        # Update position and velocity
-        model.addConstr(
-            p[i, t+1] == p[i, t] + v[i, t] * dt + 0.5 * (u[i, t]/m_i) * dt**2
-        )
-        model.addConstr(
-            v[i, t+1] == v[i, t] + (u[i, t]/m_i) * dt
-        )
-```
-
-#### **Collision Avoidance**
-```python
-# Linearized safe distance (e.g., along each axis)
-for i, j in combinations(satellites, 2):
-    for t in time_steps:
-        model.addConstr(
-            (p[i,t][0] - p[j,t][0]) >= d_safe / 3  # X-axis separation
-        )
-        model.addConstr(
-            (p[i,t][1] - p[j,t][1]) >= d_safe / 3  # Y-axis separation
-        )
-        # Repeat for Z-axis
-```
-
-### **Step 4: Set Objective**
-```python
-# Minimize total fuel consumption
-obj = gp.quicksum(delta[i, t] for i in satellites for t in time_steps)
-model.setObjective(obj, GRB.MINIMIZE)
-```
-
-### **Step 5: Solve and Analyze**
-```python
-model.optimize()
-
-if model.status == GRB.OPTIMAL:
-    print("Optimal solution found.")
-    # Extract thrust vectors and positions
-else:
-    print("No solution found.")
+def add_collision_constraints(model, satellites, time_steps, d_safe):
+    for t in time_steps[1:]:
+        for i,j in combinations(satellites, 2):
+            for a in 'xyz':
+                diff = model.addVar(name=f"diff_{i}{j}_{t}_{a}")
+                model.addConstr(diff == pos[i,t,a] - pos[j,t,a])
+                abs_diff = model.addVar(name=f"abs_{i}{j}_{t}_{a}", lb=0)
+                model.addGenConstrAbs(abs_diff, diff)
+                b = model.addVar(vtype=GRB.BINARY, name=f"b_{i}{j}_{t}_{a}")
+                model.addConstr(abs_diff >= d_safe * b)
+            model.addConstr(sum(b[a] for a in 'xyz') >= 1)
 ```
 
 ---
 
-## Implementation Steps
-1. **Data Preparation**:  
-   - Define initial satellite positions, velocities, and debris trajectories.  
-   - Set parameters \( F_\text{max}, d_\text{safe}, \Delta t \).  
+## Solution Methodology
 
-2. **Model Setup**:  
-   - Choose LP or MILP based on thruster type (continuous vs. pulsed).  
+### **Tunable Solver Parameters**
+| Parameter | Purpose | Typical Value |
+|-----------|---------|---------------|
+| MIPGap | Optimality tolerance | 0.1%-1% |
+| TimeLimit | Computation budget | 300-3600s |
+| NodeMethod | Tree exploration | Hybrid (1) |
+| Heuristics | Solution improvement | 0.05-0.2 |
 
-3. **Solve with Gurobi**:  
-   - Use `model.optimize()` and handle solution status.  
-
-4. **Post-Processing**:  
-   - Visualize trajectories and collision-avoidance maneuvers.  
-   - Calculate fuel savings vs. non-optimized maneuvers.  
-
----
-
-## Validation and Sensitivity Analysis
-- **Test Case**: Simulate a near-miss scenario (e.g., two satellites on a collision course).  
-- **Benchmark**: Compare fuel use against a greedy heuristic (e.g., maximum-thrust avoidance).  
-- **Sensitivity**: Vary \( d_\text{safe} \) to analyze trade-offs between safety and fuel cost.  
+### **Performance Enhancement**
+1. **Warm Starting**: Initialize with passive drift trajectories
+2. **Constraint Relaxation**: Gradually tighten safety margins
+3. **Parallel Solving**: Exploit multi-core architectures
 
 ---
 
-This document provides a complete framework to model and solve satellite collision avoidance using Gurobi. Adjust parameters and constraints as needed for specific scenarios.
+## Model Validation
+
+### **Verification Protocol**
+1. **Dynamic Feasibility Check**
+   - Verify numerical stability of integration scheme
+   - Confirm thrust magnitudes within \( \pm F_{\text{max}} \)
+
+2. **Safety Certification**
+   - Validate minimum pairwise distances \( \geq d_{\text{safe}} \)
+   - Check axis separation logic for all triples
+
+### **Sensitivity Studies**
+1. Parameter | Effect Analysis
+   - \( \Delta t \): Temporal resolution vs fuel efficiency
+   - \( d_{\text{safe}} \): Safety vs maneuver complexity
+   - \( F_{\text{max}} \): Thrust capability vs solution quality
