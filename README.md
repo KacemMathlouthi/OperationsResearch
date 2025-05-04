@@ -1,7 +1,10 @@
 <h1 align="center">Operations Research Web Application</h1>
 
 <p align="center">
-  <img src="https://insat.rnu.tn/assets/images/logo_c.png" width="100" alt="INSAT Logo">
+  <img src="https://insat.rnu.tn/assets/images/logo_c.png" width="100" alt="INSAT Logo"><br><br>
+  <a href="https://kacemath-operations-research.hf.space/" target="_blank">
+    <img src="https://img.shields.io/badge/HuggingFace-Space-blue?logo=huggingface" alt="Try it on Hugging Face Spaces" />
+  </a>
 </p>
 
 This project demonstrates the use of **Linear Programming (PL)** and **Mixed-Integer Linear Programming (PLNE)** for solving real-world optimisation problems using **Gurobi**. It uses **Gradio** to provide an interactive web interface.
