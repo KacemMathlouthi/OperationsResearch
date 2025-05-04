@@ -17,7 +17,7 @@ time_steps = list(range(30))
 dt = 1.0             # 10 s
 F_max = 100.0        # 100 kN
 c_fuel = 1e-5        # same relative cost
-m_i = 1.0            # 0.01 kg
+m_i = 10.0           # 0.01 kg
 # safety distance scaled: 0.00001 units = 0.1 m
 # we apply collision avoidance only from t=1 onward to respect initial positions
 
