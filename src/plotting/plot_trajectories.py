@@ -100,4 +100,5 @@ def animate_satellite_trajectories(model, time_steps, interval=200):
     ani = animation.FuncAnimation(
         fig, update, frames=time_steps, interval=interval, blit=False
     )
+    ani.save("satellite_trajectories.gif", writer='imagemagick', fps=5)
     plt.show()
