@@ -1,87 +1,47 @@
-<h1 align="center">Operations Research Web Application</h1>
+# Satellite Collision Avoidance Web App
 
-<p align="center">
-  <img src="https://insat.rnu.tn/assets/images/logo_c.png" width="100" alt="INSAT Logo"><br><br>
-  <a href="https://kacemath-operations-research.hf.space/" target="_blank">
-    <img src="https://img.shields.io/badge/HuggingFace-Space-blue?logo=huggingface" alt="Try it on Hugging Face Spaces" />
-  </a>
-</p>
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-This project demonstrates the use of **Linear Programming (PL)** and **Mixed-Integer Linear Programming (PLNE)** for solving real-world optimisation problems using **Gurobi**. It uses **Gradio** to provide an interactive web interface.
+A web-based interface for optimizing satellite trajectories to prevent collisions while minimizing fuel consumption. Built with Python/Gurobi for optimization and Three.js for 3D visualization.
+
+![App Screenshot](./assets/sat-cap.png)
+
+### Fuel Minimization Objective
+```math
+\text{Minimize } \sum_{i=1}^N \sum_{t=0}^{T-1} \delta_{i,t} \quad \text{where } \delta_{i,t} \geq c_{\text{fuel}} \sum_{a \in \{x,y,z\}} |u_{i,t}^a|
+```
 
 ## Features
+- Interactive 3D visualization of satellite trajectories
+- Configurable safety margins and thrust limits
+- Real-time MILP optimization backend
+- Scenario export/import in JSON format
 
-- **Production Planning (PL):** Optimises the number of products to manufacture for maximum profit under resource constraints.
-- **Staff Scheduling (PLNE):** Mock assignment of employees to shifts based on availability.
+## Problem Formulation
+### Orbital Dynamics
+For satellite $i$ at time $t$ with mass $m_i$ and thrust $\mathbf{u}_{i,t}$:
 
-## Project Structure
-
-```
-.
-├── app.py                          # Main entry point of the Gradio application
-├── assets/
-│   └── compte_rendu.pdf           # Project report
-├── models/
-│   └── gurobi_models.py           # Gurobi-based solvers for PL and PLNE
-├── ui/
-│   └── gradio_sections.py         # UI layout and Gradio component logic
-├── requirements.txt               # Python dependencies
-└── README.md                      # Project documentation
-````
-
-## Prerequisites
-- Python 3.9 or higher
-
-## Environment Setup
-### 1. Clone the repository
-
-```bash
-git clone https://github.com/KacemMathlouthi/OperationsResearch.git
-cd OperationsResearch
-````
-
-### 2. Create and activate a virtual environment
-
-#### Linux/macOS
-
-```bash
-python3 -m venv venv
-source venv/bin/activate
+```math
+\begin{aligned}
+\mathbf{p}_{i,t+1} &= \mathbf{p}_{i,t} + \mathbf{v}_{i,t} \Delta t + \frac{1}{2m_i} \mathbf{u}_{i,t} (\Delta t)^2 \\
+\mathbf{v}_{i,t+1} &= \mathbf{v}_{i,t} + \frac{1}{m_i} \mathbf{u}_{i,t} \Delta t
+\end{aligned}
 ```
 
-#### Windows
-
-```cmd
-python -m venv venv
-venv\Scripts\activate
+### Collision Avoidance
+For all satellite pairs $(i,j)$ and times $t \geq 1$:
+```math
+\begin{aligned}
+|p_{i,t}^x - p_{j,t}^x| &\geq d_{\text{safe}} \cdot b_{ij,t}^x \\
+|p_{i,t}^y - p_{j,t}^y| &\geq d_{\text{safe}} \cdot b_{ij,t}^y \\
+|p_{i,t}^z - p_{j,t}^z| &\geq d_{\text{safe}} \cdot b_{ij,t}^z \\
+b_{ij,t}^x + b_{ij,t}^y + b_{ij,t}^z &\geq 1 \quad (b_{ij,t}^a \in \{0,1\})
+\end{aligned}
 ```
 
-### 3. Install dependencies
+### Additional Resources
 
-```bash
-pip install -r requirements.txt
-```
+For a comprehensive explanation of the problem statement, including mathematical formulations and assumptions, refer to the [Problem Statement](./assets/problem_statement.md). This document provides in-depth details about the orbital dynamics, collision avoidance constraints, and optimization objectives used in this project.
 
-## Running the Application
 
-Ensure you are in the project root directory and your virtual environment is activated:
 
-```bash
-python app.py
-```
-
-The application will launch locally at `http://127.0.0.1:7860/`.
-
-## Usage
-
-### Tabs Available:
-
-* **Project Info:** Displays team information and a PDF report.
-* **Production Planning (PL):** Solve and visualise a linear programming problem using product and resource data.
-* **Staff Scheduling (PLNE):** Simulated assignment of employees to shifts based on availability.
-
-## Notes
-
-* Visualisations are generated with `matplotlib`.
-* UI built with `Gradio Blocks` using tabbed layout.
-* PDF report embedded with base64 encoding.
