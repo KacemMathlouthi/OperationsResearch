@@ -4,22 +4,28 @@ import os
 from ui.gradio_sections import (
     project_info_tab,
     production_planning_tab,
-    staff_scheduling_tab,
+    vehicle_routing_tab,
 )
-from models.gurobi_models import solve_pl, mock_solve_plne
+from models.gurobi_models import solve_pl, solve_plne
 
 # Mock Data
 pl_df = pd.DataFrame(
     {
         "Product": ["A", "B", "C"],
-        "Profit/Unit": [10, 20, 15],
+        "Profit/Unit": [15, 20, 15],
         "Resource Usage": [3, 5, 2],
     }
 )
 
-mock_plne_df = pd.DataFrame(
-    {"Employee": ["Alice", "Bob", "Charlie"], "Availability": ["Yes", "Yes", "No"]}
-)
+plne_df = pd.DataFrame([
+    {"Node": 0, "X": 50, "Y": 50, "Demand": 0},
+    {"Node": 1, "X": 20, "Y": 20, "Demand": 10},
+    {"Node": 2, "X": 80, "Y": 20, "Demand": 15},
+    {"Node": 3, "X": 20, "Y": 80, "Demand": 10},
+    {"Node": 4, "X": 80, "Y": 80, "Demand": 10},
+    {"Node": 5, "X": 50, "Y": 10, "Demand": 20},
+])
+
 
 # Descriptions
 pl_description = """
@@ -28,8 +34,8 @@ Select the quantity of each product to produce to **maximize profit**, under lim
 """
 
 plne_description = """
-### 👥 Staff Scheduling (PLNE)
-Assign employees to shifts to **minimize cost** or **maximize shift coverage**, with availability and legal limits.
+### 🚚 Capacitated Vehicle Routing Problem
+Provide node coordinates and demands, plus vehicle capacity and number of vehicles.         
 """
 
 # Read and encode the PDF - go up one directory to find assets at project root
@@ -51,7 +57,7 @@ with gr.Blocks(title="Operations Research App") as ro_app:
     with gr.Tabs():
         project_info_tab()
         production_planning_tab(pl_df, solve_pl, pl_description)
-        staff_scheduling_tab(mock_plne_df, mock_solve_plne, plne_description)
+        vehicle_routing_tab(plne_df, solve_plne, plne_description)
 
 if __name__ == "__main__":
     ro_app.launch(favicon_path=favicon_path)
