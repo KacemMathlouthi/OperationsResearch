@@ -1,21 +1,23 @@
-import gradio as gr
-import os
 import base64
-import sys
-import pandas as pd                                                         
+import os
+
+import gradio as gr
+import pandas as pd
+
 import achref.src.logger as logger
 
 logger = logger.get_logger(__name__)
 
+
 def project_info_tab():
-    with gr.Tab("\U0001F4D8 Project Info"):
+    with gr.Tab("\U0001f4d8 Project Info"):
         gr.Markdown(
             """
-        # \U0001F393 GL3 - 2025 - Operational Research Project
+        # \U0001f393 GL3 - 2025 - Operational Research Project
         This application demonstrates how **Linear Programming (PL)** and **Mixed-Integer Linear Programming (PLNE)** can be applied to solve real-world optimisation problems using **Gurobi**.
         
         ---
-        # \U0001F465 Project Members
+        # \U0001f465 Project Members
         - **Kacem Mathlouthi** — GL3/2  
         - **Mohamed Amine Houas** — GL3/1  
         - **Oussema Kraiem** — GL3/2  
@@ -24,7 +26,7 @@ def project_info_tab():
         - **Youssef Aaridhi** — GL3/2  
         - **Achref Ben Ammar** — GL3/1  
         ---
-        # \U0001F9FE Compte Rendu
+        # \U0001f9fe Compte Rendu
         """
         )
         pdf_path = os.path.join(
@@ -40,71 +42,123 @@ def project_info_tab():
         """
         )
 
-def production_planning_tab(mock_pl_df, solve_pl_gurobi, pl_description):
-    with gr.Tab("\U0001F3ED Production Planning (PL)"):
-        gr.Markdown(pl_description)
+
+def oil_refinery_tab(
+    mock_crude_data,
+    mock_product_data,
+    mock_yields_data,
+    mock_quality_reqs,
+    solve_refinery_optimization,
+    refinery_description,
+):
+    with gr.Tab("\U0001f3ed Oil Refinery Optimization (PL)"):
+        gr.Markdown(refinery_description)
 
         # Add mathematical model description
         gr.Markdown(
             r"""
-            ### \U0001F9EE Mathematical Formulation
+            ### 🧮 Mathematical Formulation
 
-            Let:  
+            **Sets and Indices**
             | Symbol      | Description                             |
             |-------------|-----------------------------------------|
-            | $$x_i$$       | Number of units to produce for product i |
-            | $$p_i$$       | Profit per unit for product i         |
-            | $$r_i$$       | Resource usage per unit for product i |
-            | $$R$$         | Total resource available              |
+            | $$i=1,...,m$$       | Types of crude oil (inputs) |
+            | $$j=1,...,n$$       | Types of fuel products (outputs) |
+
+            **Parameters**
+            | Symbol      | Description                             |
+            |-------------|-----------------------------------------|
+            | $$c_i$$       | Cost per unit of crude $i$ |
+            | $$p_j$$       | Selling price per unit of product $j$ |
+            | $$y_{ij}$$    | Yield of product $j$ from crude $i$ (liters of product per liter of crude) |
+            | $$q_{ij}$$    | Quality contribution of crude $i$ to product $j$ |
+            | $$Q_j^{min}$$ | Minimum average quality required for product $j$ |
+            | $$D_j$$       | Minimum demand (liters) for product $j$ |
+            | $$A_i$$       | Availability limit (liters) of crude $i$ |
+
+            **Decision Variables**
+            | Symbol      | Description                             |
+            |-------------|-----------------------------------------|
+            | $$x_i$$       | Amount of crude oil $i$ used (liters) |
 
             **Objective:**  
             $$
-            \text{Maximise} \quad \sum_i p_i \cdot x_i
+            \text{Maximize} \quad \left(\sum_{j=1}^n p_j \cdot \sum_{i=1}^m y_{ij} \cdot x_i - \sum_{i=1}^m c_i \cdot x_i\right)
             $$
 
-            **Constraint:**  
-            $$
-            \sum_i r_i \cdot x_i \leq R \quad \text{and} \quad x_i \geq 0
-            $$
+            **Constraints:**  
+            1. Crude Availability:
+            $$x_i \leq A_i \quad \forall i$$
+
+            2. Demand Satisfaction:
+            $$\sum_{i=1}^m y_{ij} \cdot x_i \geq D_j \quad \forall j$$
+
+            3. Quality Requirements:
+            $$\sum_{i=1}^m q_{ij} \cdot y_{ij} \cdot x_i \geq Q_j^{min} \cdot \sum_{i=1}^m y_{ij} \cdot x_i \quad \forall j$$
+
+            4. Non-negativity:
+            $$x_i \geq 0 \quad \forall i$$
             """
         )
 
-        with gr.Row():
-            input_pl = gr.Dataframe(
-                headers=["Product", "Profit/Unit", "Resource Usage"],
-                value=mock_pl_df,
-                label="Input Product Data",
-            )
-        total_resource_input = gr.Number(
-            value=100, label="Total Resource Available (R)"
-        )
-        solve_btn_pl = gr.Button("Solve Production Problem")
+        with gr.Tabs():
+            with gr.TabItem("Crude Oils"):
+                crude_input = gr.Dataframe(
+                    headers=["Crude", "Cost", "Availability"],
+                    value=mock_crude_data,
+                    label="Crude Oil Data",
+                )
 
-        result_table_pl = gr.Dataframe(label="Optimised Result")
-        result_plot_combined = gr.Plot(label="Data Visualisation")
+            with gr.TabItem("Products"):
+                product_input = gr.Dataframe(
+                    headers=["Product", "Price", "Demand"],
+                    value=mock_product_data,
+                    label="Product Data",
+                )
+
+            with gr.TabItem("Yields & Quality"):
+                yields_input = gr.Dataframe(
+                    headers=["Crude", "Product", "Yield", "Quality"],
+                    value=mock_yields_data,
+                    label="Yield & Quality Data",
+                )
+
+            with gr.TabItem("Quality Requirements"):
+                quality_reqs_input = gr.Dataframe(
+                    headers=["Product", "MinQuality"],
+                    value=mock_quality_reqs,
+                    label="Quality Requirements",
+                )
+
+        solve_btn = gr.Button("Solve Refinery Optimization Problem")
         status_output = gr.Textbox(label="Status", interactive=False)
+        results_table = gr.Dataframe(label="Optimization Results")
+        results_plot = gr.Plot(label="Results Visualization")
 
-        def _solve_with_floats(df, R):
+        def _solve_refinery_problem(crude_df, product_df, yields_df, quality_df):
             try:
-                df["Profit/Unit"]     = df["Profit/Unit"].astype(float)
-                df["Resource Usage"]  = df["Resource Usage"].astype(float)
-                result_df, fig = solve_pl_gurobi(df, total_resource=R)
+                # Convert all numeric columns to float
+                for df in [crude_df, product_df, yields_df, quality_df]:
+                    for col in df.columns:
+                        if col not in ["Crude", "Product"]:
+                            df[col] = pd.to_numeric(df[col], errors="coerce")
+
+                result_df, fig = solve_refinery_optimization(
+                    crude_df, product_df, yields_df, quality_df
+                )
                 return result_df, fig, "Solved Successfully"
             except Exception as e:
                 return pd.DataFrame(), None, f"❌ Error: {str(e)}"
 
-        solve_btn_pl.click(
-            fn=_solve_with_floats,
-            inputs=[input_pl, total_resource_input],
-            outputs=[
-                result_table_pl,
-                result_plot_combined,
-                status_output
-            ]
+        solve_btn.click(
+            fn=_solve_refinery_problem,
+            inputs=[crude_input, product_input, yields_input, quality_reqs_input],
+            outputs=[results_table, results_plot, status_output],
         )
 
+
 def vehicle_routing_tab(mock_plne_df, solve_plne, plne_description):
-    with gr.Tab("\U0001F69A Vehicle Routing (PLNE)"):
+    with gr.Tab("\U0001f69a Vehicle Routing (PLNE)"):
         gr.Markdown(plne_description)
         gr.HTML(
             '<img src="https://pyvrp.readthedocs.io/en/latest/_images/introduction-to-vrp.svg" '
@@ -174,16 +228,16 @@ def vehicle_routing_tab(mock_plne_df, solve_plne, plne_description):
         )
         with gr.Row():
             cap_input = gr.Number(value=40, label="Vehicle capacity (Q)")
-            k_input   = gr.Number(value=2, label="Number of vehicles (K)")
+            k_input = gr.Number(value=2, label="Number of vehicles (K)")
         solve_btn = gr.Button("Solve VRP")
         status_output = gr.Textbox(label="Status", interactive=False)
         result_table = gr.Dataframe(label="Routes Summary")
-        result_plot  = gr.Plot(label="Route Map & Summary")
+        result_plot = gr.Plot(label="Route Map & Summary")
 
         def _solve_vrp_with_floats(df, Q, K):
             try:
-                df["X"]      = df["X"].astype(float)
-                df["Y"]      = df["Y"].astype(float)
+                df["X"] = df["X"].astype(float)
+                df["Y"] = df["Y"].astype(float)
                 df["Demand"] = df["Demand"].astype(float)
 
                 custs = df[df["Node"] != 0]
@@ -191,11 +245,15 @@ def vehicle_routing_tab(mock_plne_df, solve_plne, plne_description):
                 too_big = custs[custs["Demand"] > Q]
                 if not too_big.empty:
                     bad = int(too_big["Node"].iloc[0])
-                    raise ValueError(f"Client {bad} demand ({too_big['Demand'].iloc[0]}) exceeds capacity Q={Q}")
+                    raise ValueError(
+                        f"Client {bad} demand ({too_big['Demand'].iloc[0]}) exceeds capacity Q={Q}"
+                    )
 
                 total = custs["Demand"].sum()
                 if total > Q * K:
-                    raise ValueError(f"Total demand ({total}) exceeds fleet capacity Q*K={Q*K}")
+                    raise ValueError(
+                        f"Total demand ({total}) exceeds fleet capacity Q*K={Q*K}"
+                    )
 
                 routes_df, fig = solve_plne(df, vehicle_capacity=Q, num_vehicles=K)
                 return routes_df, fig, "Solved Successfully"
