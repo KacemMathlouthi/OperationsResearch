@@ -8,11 +8,20 @@ import achref.src.logger as logger
 logger = logger.get_logger(__name__)
 
 def solve_pl(data, total_resource=100):
+    required_cols = {"Product", "Profit/Unit", "Resource Usage"}
+    if not isinstance(data, pd.DataFrame):
+        raise TypeError("Input 'data' must be a pandas DataFrame.")
+    if not required_cols.issubset(data.columns):
+        missing = required_cols - set(data.columns)
+        raise ValueError(f"Missing required columns in 'data': {missing}")
+    if not isinstance(total_resource, (int, float)) or total_resource <= 0:
+        raise ValueError("'total_resource' must be a positive number.")
+
     model = Model("ProductionPlanning")
     logger.info("Starting Gurobi model for production planning")
     logger.info("Data: %s", data)
-    # Turn off solver output
-    model.setParam("OutputFlag", 0) 
+
+    model.setParam("OutputFlag", 0)
 
     # Extract product info
     products = data["Product"].tolist()
@@ -88,92 +97,53 @@ def solve_pl(data, total_resource=100):
     return result_df, fig
 
 
-def solve_plne(data: pd.DataFrame, vehicle_capacity: float, num_vehicles: int):
-    """
-    data: DataFrame with columns ["Node","X","Y","Demand"]
-    vehicle_capacity: capacity Q of each vehicle
-    num_vehicles: number of vehicles K
-    Returns: (routes_df, fig)
-      - routes_df: DataFrame with columns ["Route","Sequence","Load","Distance"]
-      - fig: matplotlib.figure.Figure with the route‐map and summary bars
-    """
-    # 1. Parse inputs
+def _validate_plne_input(data, vehicle_capacity, num_vehicles):
+    required_cols = {"Node", "X", "Y", "Demand"}
+    if not isinstance(data, pd.DataFrame):
+        raise TypeError("Input 'data' must be a pandas DataFrame.")
+    if not required_cols.issubset(data.columns):
+        missing = required_cols - set(data.columns)
+        raise ValueError(f"Missing required columns in 'data': {missing}")
+    if not isinstance(vehicle_capacity, (int, float)) or vehicle_capacity <= 0:
+        raise ValueError("'vehicle_capacity' must be a positive number.")
+    if not isinstance(num_vehicles, int) or num_vehicles <= 0:
+        raise ValueError("'num_vehicles' must be a positive integer.")
+
+def _prepare_plne_data(data):
     coords = {int(r.Node): (r.X, r.Y) for _, r in data.iterrows()}
     demand = {int(r.Node): r.Demand for _, r in data.iterrows()}
     nodes = list(coords.keys())
     depot = 0
+    if depot not in nodes:
+        raise ValueError("Depot node (0) is missing from input.")
     customers = [i for i in nodes if i != depot]
-    Q = vehicle_capacity
-    K = num_vehicles
+    return coords, demand, nodes, depot, customers
 
-    # 2. Precompute distances
-    cost = {
-        (i, j): math.hypot(coords[i][0] - coords[j][0],
-                           coords[i][1] - coords[j][1])
+def _compute_distance_matrix(coords, nodes):
+    return {
+        (i, j): math.hypot(coords[i][0] - coords[j][0], coords[i][1] - coords[j][1])
         for i in nodes for j in nodes if i != j
     }
 
-    # 3. Build model
-    m = Model("CVRP")
-    m.setParam("OutputFlag", 0)
-
-    # Decision vars
-    x = m.addVars(cost.keys(), vtype=GRB.BINARY, name="x")
-    u = m.addVars(nodes, lb=0, ub=Q, vtype=GRB.CONTINUOUS, name="u")
-
-    # Objective
-    m.setObjective(quicksum(cost[i, j] * x[i, j] for i, j in cost), GRB.MINIMIZE)
-
-    # Degree constraints
-    m.addConstrs(
-        (quicksum(x[i, j] for j in nodes if j != i) == 1 for i in customers),
-        name="leave"
-    )
-    m.addConstrs(
-        (quicksum(x[i, j] for i in nodes if i != j) == 1 for j in customers),
-        name="enter"
-    )
-    # Depot flow
-    m.addConstr(quicksum(x[depot, j] for j in customers) == K, "dep_out")
-    m.addConstr(quicksum(x[i, depot] for i in customers) == K, "dep_in")
-
-    # MTZ subtour‐elimination & capacity
-    m.addConstrs(
-        (u[i] - u[j] + Q * x[i, j] <= Q - demand[j]
-         for i in customers for j in customers if i != j),
-        name="mtz"
-    )
-    m.addConstr(u[depot] == 0, "depot_load")
-
-    # Solve
-    m.optimize()
-
-    # 4. Extract x‐values
-    sol = m.getAttr('x', x)
-
-    # 4a. Find exactly which customers each vehicle leaves the depot to serve
-    starts = [ j for (i,j),val in sol.items() 
-               if i == depot and val > 0.5 ]
-    # sanity check
+def _reconstruct_routes(sol, depot, K):
+    starts = [j for (i, j), val in sol.items() if i == depot and val > 0.5]
     if len(starts) != K:
         raise ValueError(f"Expected {K} routes out of depot, got {len(starts)}")
-
-    # 4b. Build a succ map for ALL non‐depot nodes (each has exactly 1 outgoing)
-    succ = { i: j for (i,j),val in sol.items() 
-             if i != depot and val > 0.5 }
-
-    # 4c. Now reconstruct each of the K routes
+    succ = {i: j for (i, j), val in sol.items() if i != depot and val > 0.5}
     routes = []
     for start in starts:
         route = [depot, start]
         cur = start
         while cur != depot:
-            nxt = succ[cur]
+            nxt = succ.get(cur)
+            if nxt is None:
+                raise ValueError(f"Incomplete route starting at node {start}.")
             route.append(nxt)
             cur = nxt
         routes.append(route)
+    return routes
 
-    # 5. Build result DataFrame
+def _build_routes_df(routes, demand, coords, depot):
     rows = []
     for ridx, route in enumerate(routes, start=1):
         load = sum(demand[n] for n in route if n != depot)
@@ -188,37 +158,73 @@ def solve_plne(data: pd.DataFrame, vehicle_capacity: float, num_vehicles: int):
             "Load": load,
             "Distance": dist
         })
-    routes_df = pd.DataFrame(rows)
+    return pd.DataFrame(rows)
 
-    # 6. Create plots
-    fig, axs = plt.subplots(1, 2, figsize=(14,6))
-
-    # Plot A: Map of routes
+def _plot_plne(routes, routes_df, coords, customers, depot, K):
+    fig, axs = plt.subplots(1, 2, figsize=(14, 6))
     ax = axs[0]
-    ax.scatter(*zip(*[coords[i] for i in customers]),
-               c='blue', label='Customers')
+    ax.scatter(*zip(*[coords[i] for i in customers]), c='blue', label='Customers')
     ax.scatter(*coords[depot], c='red', s=100, label='Depot')
     colors = plt.cm.get_cmap('tab10', K)
-
     for ridx, route in enumerate(routes):
         pts = [coords[n] for n in route]
         xs, ys = zip(*pts)
         ax.plot(xs, ys, '-o', color=colors(ridx), label=f'Route {ridx+1}')
     ax.set_title("Vehicle Routes")
     ax.legend(loc='upper right')
-
-    # Plot B: Route loads & distances
     ax2 = axs[1]
     bar_width = 0.35
     idx = range(len(routes_df))
     ax2.bar(idx, routes_df["Load"], bar_width, label="Load")
-    ax2.bar([i+bar_width for i in idx], routes_df["Distance"],
+    ax2.bar([i + bar_width for i in idx], routes_df["Distance"],
             bar_width, label="Distance")
-    ax2.set_xticks([i+bar_width/2 for i in idx])
+    ax2.set_xticks([i + bar_width / 2 for i in idx])
     ax2.set_xticklabels([f"R{r}" for r in routes_df["Route"]])
     ax2.set_ylabel("Units / Distance")
     ax2.set_title("Load vs Distance per Route")
     ax2.legend()
-
     fig.tight_layout()
-    return routes_df, fig
+    return fig
+
+def solve_plne(data: pd.DataFrame, vehicle_capacity: float, num_vehicles: int):
+    """
+    data: DataFrame with columns ["Node","X","Y","Demand"]
+    vehicle_capacity: capacity Q of each vehicle
+    num_vehicles: number of vehicles K
+    Returns: (routes_df, fig)
+      - routes_df: DataFrame with columns ["Route","Sequence","Load","Distance"]
+      - fig: matplotlib.figure.Figure with the route‐map and summary bars
+    """
+    try:
+        _validate_plne_input(data, vehicle_capacity, num_vehicles)
+        coords, demand, nodes, depot, customers = _prepare_plne_data(data)
+        Q, K = vehicle_capacity, num_vehicles
+        cost = _compute_distance_matrix(coords, nodes)
+
+        m = Model("CVRP")
+        m.setParam("OutputFlag", 0)
+        x = m.addVars(cost.keys(), vtype=GRB.BINARY, name="x")
+        u = m.addVars(nodes, lb=0, ub=Q, vtype=GRB.CONTINUOUS, name="u")
+        m.setObjective(quicksum(cost[i, j] * x[i, j] for i, j in cost), GRB.MINIMIZE)
+        m.addConstrs((quicksum(x[i, j] for j in nodes if j != i) == 1 for i in customers), "leave")
+        m.addConstrs((quicksum(x[i, j] for i in nodes if i != j) == 1 for j in customers), "enter")
+        m.addConstr(quicksum(x[depot, j] for j in customers) == K, "dep_out")
+        m.addConstr(quicksum(x[i, depot] for i in customers) == K, "dep_in")
+        m.addConstrs(
+            (u[i] - u[j] + Q * x[i, j] <= Q - demand[j]
+             for i in customers for j in customers if i != j),
+            name="mtz"
+        )
+        m.addConstr(u[depot] == 0, "depot_load")
+        m.optimize()
+        if m.status != GRB.OPTIMAL:
+            raise ValueError("Gurobi failed to find an optimal solution.")
+        sol = m.getAttr('x', x)
+        routes = _reconstruct_routes(sol, depot, K)
+        routes_df = _build_routes_df(routes, demand, coords, depot)
+        fig = _plot_plne(routes, routes_df, coords, customers, depot, K)
+        return routes_df, fig
+    except (ValueError, TypeError) as e:
+        raise RuntimeError(f"Error in solve_plne: {e}")
+    except Exception as e:
+        raise RuntimeError(f"Unexpected error in solve_plne: {e}")

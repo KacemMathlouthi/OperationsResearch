@@ -2,20 +2,20 @@ import gradio as gr
 import os
 import base64
 import sys
-import pandas as pd                                                        
+import pandas as pd                                                         
 import achref.src.logger as logger
 
 logger = logger.get_logger(__name__)
 
 def project_info_tab():
-    with gr.Tab("📘 Project Info"):
+    with gr.Tab("\U0001F4D8 Project Info"):
         gr.Markdown(
             """
-        # 🎓 GL3 - 2025 - Operational Research Project
+        # \U0001F393 GL3 - 2025 - Operational Research Project
         This application demonstrates how **Linear Programming (PL)** and **Mixed-Integer Linear Programming (PLNE)** can be applied to solve real-world optimisation problems using **Gurobi**.
         
         ---
-        # 👥 Project Members
+        # \U0001F465 Project Members
         - **Kacem Mathlouthi** — GL3/2  
         - **Mohamed Amine Houas** — GL3/1  
         - **Oussema Kraiem** — GL3/2  
@@ -24,7 +24,7 @@ def project_info_tab():
         - **Youssef Aaridhi** — GL3/2  
         - **Achref Ben Ammar** — GL3/1  
         ---
-        # 🧾 Compte Rendu
+        # \U0001F9FE Compte Rendu
         """
         )
         pdf_path = os.path.join(
@@ -40,15 +40,14 @@ def project_info_tab():
         """
         )
 
-
 def production_planning_tab(mock_pl_df, solve_pl_gurobi, pl_description):
-    with gr.Tab("🏭 Production Planning (PL)"):
+    with gr.Tab("\U0001F3ED Production Planning (PL)"):
         gr.Markdown(pl_description)
 
         # Add mathematical model description
         gr.Markdown(
             r"""
-            ### 🧮 Mathematical Formulation
+            ### \U0001F9EE Mathematical Formulation
 
             Let:  
             | Symbol      | Description                             |
@@ -82,39 +81,38 @@ def production_planning_tab(mock_pl_df, solve_pl_gurobi, pl_description):
         solve_btn_pl = gr.Button("Solve Production Problem")
 
         result_table_pl = gr.Dataframe(label="Optimised Result")
-        
-        # Create plot output placeholders
         result_plot_combined = gr.Plot(label="Data Visualisation")
+        status_output = gr.Textbox(label="Status", interactive=False)
 
         def _solve_with_floats(df, R):
+            try:
                 df["Profit/Unit"]     = df["Profit/Unit"].astype(float)
                 df["Resource Usage"]  = df["Resource Usage"].astype(float)
-                return solve_pl_gurobi(df, total_resource=R)
-        
+                result_df, fig = solve_pl_gurobi(df, total_resource=R)
+                return result_df, fig, "Solved Successfully"
+            except Exception as e:
+                return pd.DataFrame(), None, f"❌ Error: {str(e)}"
+
         solve_btn_pl.click(
             fn=_solve_with_floats,
             inputs=[input_pl, total_resource_input],
             outputs=[
                 result_table_pl,
                 result_plot_combined,
+                status_output
             ]
         )
 
-
-# in gradio_sections.py
-
 def vehicle_routing_tab(mock_plne_df, solve_plne, plne_description):
-    
-    with gr.Tab("🚚 Vehicle Routing (PLNE)"):
+    with gr.Tab("\U0001F69A Vehicle Routing (PLNE)"):
         gr.Markdown(plne_description)
-        # Log the Python path of the project
         gr.HTML(
             '<img src="https://pyvrp.readthedocs.io/en/latest/_images/introduction-to-vrp.svg" '
             'alt="VRP Problem Illustration" width="600px" />'
         )
         gr.Markdown(
             r"""
-            ### 🧮 Mathematical Formulation (Capacitated VRP)
+            ### \U0001F9EE Mathematical Formulation (Capacitated VRP)
 
 
             | Symbol                         | Description                                                   |
@@ -146,7 +144,6 @@ def vehicle_routing_tab(mock_plne_df, solve_plne, plne_description):
             \sum_{i\neq j} x_{ij} = 1
             \quad \forall\, j\neq0
             $$
-            > *Explanation:* Every customer `i` must have exactly one vehicle leaving it and one arriving—ensuring each customer is visited exactly once.
 
             2. **Depot flow**  
             $$
@@ -155,7 +152,6 @@ def vehicle_routing_tab(mock_plne_df, solve_plne, plne_description):
             $$
             \sum_{i>0} x_{i0} = K
             $$
-            > *Explanation:* Exactly `K` vehicles depart from the depot and `K` return, so all vehicles are used and end back at the depot.
 
             3. **MTZ subtour-elimination & capacity**  
             $$
@@ -168,24 +164,14 @@ def vehicle_routing_tab(mock_plne_df, solve_plne, plne_description):
             $$
             0 \le u_i \le Q
             $$
-            > *Explanation:*  
-            > - If `x_{ij}=1`, then $$u_j \ge u_i + d_j$$ enforcing vehicle capacity.  
-            > - These constraints also prevent any customer‐only loops (subtours), because load can’t reset without returning to the depot.  
-            > - We fix `u_0=0` at the depot and bound `u_i` by capacity `Q`.
-
-
-            ---
-
-           
-
-"""
+            """
         )
-    
+
         vrp_input = gr.Dataframe(
-                    headers=["Node", "X", "Y", "Demand"],
-                    value=mock_plne_df,
-                    label="Input Vehicle Routing Data",
-                )
+            headers=["Node", "X", "Y", "Demand"],
+            value=mock_plne_df,
+            label="Input Vehicle Routing Data",
+        )
         with gr.Row():
             cap_input = gr.Number(value=40, label="Vehicle capacity (Q)")
             k_input   = gr.Number(value=2, label="Number of vehicles (K)")
@@ -195,36 +181,29 @@ def vehicle_routing_tab(mock_plne_df, solve_plne, plne_description):
         result_plot  = gr.Plot(label="Route Map & Summary")
 
         def _solve_vrp_with_floats(df, Q, K):
-            df["X"]      = df["X"].astype(float)
-            df["Y"]      = df["Y"].astype(float)
-            df["Demand"] = df["Demand"].astype(float)
-            
-            # skip depot (assumed Node==0) when checking
-            custs = df[df["Node"] != 0]
-
             try:
-                # 1) any single demand > Q?
+                df["X"]      = df["X"].astype(float)
+                df["Y"]      = df["Y"].astype(float)
+                df["Demand"] = df["Demand"].astype(float)
+
+                custs = df[df["Node"] != 0]
+
                 too_big = custs[custs["Demand"] > Q]
                 if not too_big.empty:
                     bad = int(too_big["Node"].iloc[0])
                     raise ValueError(f"Client {bad} demand ({too_big['Demand'].iloc[0]}) exceeds capacity Q={Q}")
 
-                # 2) total demand > Q*K?
                 total = custs["Demand"].sum()
                 if total > Q * K:
                     raise ValueError(f"Total demand ({total}) exceeds fleet capacity Q*K={Q*K}")
 
-                # all good → call solver
                 routes_df, fig = solve_plne(df, vehicle_capacity=Q, num_vehicles=K)
-                return routes_df, fig, "All Good"
-            except ValueError as e:
-                # on error show empty table/plot + message
-                return pd.DataFrame(), None, str(e)
-        
-        
+                return routes_df, fig, "Solved Successfully"
+            except Exception as e:
+                return pd.DataFrame(), None, f"❌ Error: {str(e)}"
+
         solve_btn.click(
             fn=_solve_vrp_with_floats,
             inputs=[vrp_input, cap_input, k_input],
             outputs=[result_table, result_plot, status_output],
         )
-
