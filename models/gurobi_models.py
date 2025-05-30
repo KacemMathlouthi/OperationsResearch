@@ -9,239 +9,481 @@ import achref.src.logger as logger
 logger = logger.get_logger(__name__)
 
 
-def solve_refinery_optimization(
-    crude_data, product_data, crude_product_yields, product_quality_reqs
-):
+def solve_diet_problem(foods_df, requirements_df):
     """
-    Solves the Oil Refinery Optimization Problem.
+    Solves the Diet Problem using Linear Programming with flexible number of foods and nutrients.
 
     Args:
-        crude_data (pd.DataFrame): DataFrame with columns ["Crude", "Cost", "Availability"]
-        product_data (pd.DataFrame): DataFrame with columns ["Product", "Price", "Demand"]
-        crude_product_yields (pd.DataFrame): DataFrame with columns ["Crude", "Product", "Yield", "Quality"]
-        product_quality_reqs (pd.DataFrame): DataFrame with columns ["Product", "MinQuality"]
+        foods_df (pd.DataFrame): DataFrame with columns ['Food', 'Cost'] + nutrient columns
+        requirements_df (pd.DataFrame): DataFrame with columns ['Nutrient', 'Minimum']
 
     Returns:
         tuple: (result_df, fig) where result_df contains the optimal solution and fig is a matplotlib figure
+
+    Raises:
+        TypeError: If inputs are not DataFrames or contain invalid data types
+        ValueError: If data validation fails or optimization problem cannot be solved
+        Exception: If Gurobi solver encounters an error
     """
-    if not all(
-        isinstance(df, pd.DataFrame)
-        for df in [crude_data, product_data, crude_product_yields, product_quality_reqs]
-    ):
-        raise TypeError("All inputs must be pandas DataFrames")
+    logger.info("Starting Gurobi model for Diet Problem")
 
-    # Validate required columns
-    if not set(["Crude", "Cost", "Availability"]).issubset(crude_data.columns):
-        raise ValueError("crude_data must contain columns: Crude, Cost, Availability")
-    if not set(["Product", "Price", "Demand"]).issubset(product_data.columns):
-        raise ValueError("product_data must contain columns: Product, Price, Demand")
-    if not set(["Crude", "Product", "Yield", "Quality"]).issubset(
-        crude_product_yields.columns
-    ):
-        raise ValueError(
-            "crude_product_yields must contain columns: Crude, Product, Yield, Quality"
-        )
-    if not set(["Product", "MinQuality"]).issubset(product_quality_reqs.columns):
-        raise ValueError(
-            "product_quality_reqs must contain columns: Product, MinQuality"
-        )
+    try:
+        # Type validation
+        if not isinstance(foods_df, pd.DataFrame):
+            raise TypeError("foods_df must be a pandas DataFrame")
+        if not isinstance(requirements_df, pd.DataFrame):
+            raise TypeError("requirements_df must be a pandas DataFrame")
 
-    logger.info("Starting Gurobi model for Oil Refinery Optimization")
+        # Empty data validation
+        if foods_df.empty:
+            raise ValueError(
+                "Foods data cannot be empty. Please provide at least one food item."
+            )
+        if requirements_df.empty:
+            raise ValueError(
+                "Requirements data cannot be empty. Please provide at least one nutritional requirement."
+            )
+
+        # Required columns validation
+        required_food_cols = {"Food", "Cost"}
+        if not required_food_cols.issubset(foods_df.columns):
+            missing = required_food_cols - set(foods_df.columns)
+            raise ValueError(
+                f"Missing required columns in foods data: {missing}. Required columns: {required_food_cols}"
+            )
+
+        required_req_cols = {"Nutrient", "Minimum"}
+        if not required_req_cols.issubset(requirements_df.columns):
+            missing = required_req_cols - set(requirements_df.columns)
+            raise ValueError(
+                f"Missing required columns in requirements data: {missing}. Required columns: {required_req_cols}"
+            )
+
+        # Duplicate validation
+        if foods_df["Food"].duplicated().any():
+            duplicates = foods_df[foods_df["Food"].duplicated()]["Food"].tolist()
+            raise ValueError(
+                f"Duplicate food names found: {duplicates}. Each food must have a unique name."
+            )
+
+        if requirements_df["Nutrient"].duplicated().any():
+            duplicates = requirements_df[requirements_df["Nutrient"].duplicated()][
+                "Nutrient"
+            ].tolist()
+            raise ValueError(
+                f"Duplicate nutrient names found: {duplicates}. Each nutrient must be unique."
+            )
+
+        # Get nutrient columns (all columns except 'Food' and 'Cost')
+        nutrient_cols = [col for col in foods_df.columns if col not in ["Food", "Cost"]]
+
+        if not nutrient_cols:
+            raise ValueError(
+                "No nutrient columns found in foods data. Please include at least one nutrient column (e.g., 'Protein', 'Fat', 'Carbs')."
+            )
+
+        # Data type validation
+        try:
+            foods_df["Cost"] = pd.to_numeric(foods_df["Cost"], errors="raise")
+        except (ValueError, TypeError) as e:
+            raise ValueError(
+                f"Cost column contains non-numeric values. All costs must be numbers. Error: {str(e)}"
+            )
+
+        try:
+            requirements_df["Minimum"] = pd.to_numeric(
+                requirements_df["Minimum"], errors="raise"
+            )
+        except (ValueError, TypeError) as e:
+            raise ValueError(
+                f"Minimum column contains non-numeric values. All requirements must be numbers. Error: {str(e)}"
+            )
+
+        for col in nutrient_cols:
+            try:
+                foods_df[col] = pd.to_numeric(foods_df[col], errors="raise")
+            except (ValueError, TypeError) as e:
+                raise ValueError(
+                    f"Nutrient column '{col}' contains non-numeric values. All nutrient values must be numbers. Error: {str(e)}"
+                )
+
+        # Value range validation
+        if (foods_df["Cost"] < 0).any():
+            negative_costs = foods_df[foods_df["Cost"] < 0]["Food"].tolist()
+            raise ValueError(
+                f"Negative costs found for foods: {negative_costs}. All costs must be non-negative."
+            )
+
+        if (requirements_df["Minimum"] <= 0).any():
+            non_positive_reqs = requirements_df[requirements_df["Minimum"] <= 0][
+                "Nutrient"
+            ].tolist()
+            raise ValueError(
+                f"Non-positive requirements found for nutrients: {non_positive_reqs}. All requirements must be positive."
+            )
+
+        for col in nutrient_cols:
+            if (foods_df[col] < 0).any():
+                negative_nutrients = foods_df[foods_df[col] < 0]["Food"].tolist()
+                raise ValueError(
+                    f"Negative {col} values found for foods: {negative_nutrients}. All nutrient values must be non-negative."
+                )
+
+        # Check if any required nutrient is missing from foods data
+        missing_nutrients = set(requirements_df["Nutrient"]) - set(nutrient_cols)
+        if missing_nutrients:
+            raise ValueError(
+                f"Required nutrients missing from foods data: {missing_nutrients}. Please add these nutrient columns to your foods data."
+            )
+
+        # Check for zero costs (potential unbounded solution)
+        if (foods_df["Cost"] == 0).any():
+            zero_cost_foods = foods_df[foods_df["Cost"] == 0]["Food"].tolist()
+            logger.warning(
+                f"Foods with zero cost detected: {zero_cost_foods}. This may lead to unrealistic solutions."
+            )
+
+        # Feasibility pre-check: ensure at least one food provides each required nutrient
+        for _, req_row in requirements_df.iterrows():
+            nutrient = req_row["Nutrient"]
+            if nutrient in nutrient_cols:
+                max_nutrient = foods_df[nutrient].max()
+                if max_nutrient == 0:
+                    raise ValueError(
+                        f"No food provides the required nutrient '{nutrient}'. Problem is infeasible."
+                    )
+                if max_nutrient < req_row["Minimum"]:
+                    logger.warning(
+                        f"Maximum {nutrient} content ({max_nutrient}) is less than requirement ({req_row['Minimum']}). May need multiple foods."
+                    )
+
+    except Exception as e:
+        logger.error(f"Data validation failed: {str(e)}")
+        raise
 
     # Create optimization model
-    model = Model("OilRefineryOptimization")
-    model.setParam("OutputFlag", 0)
+    try:
+        model = Model("DietProblem")
+        model.setParam("OutputFlag", 0)
 
-    # Get unique crudes and products
-    crudes = crude_data["Crude"].unique().tolist()
-    products = product_data["Product"].unique().tolist()
+        # Set time limit to prevent infinite solving (60 seconds)
+        model.setParam("TimeLimit", 60)
 
-    # Extract data
-    costs = {row["Crude"]: row["Cost"] for _, row in crude_data.iterrows()}
-    availability = {
-        row["Crude"]: row["Availability"] for _, row in crude_data.iterrows()
-    }
-    prices = {row["Product"]: row["Price"] for _, row in product_data.iterrows()}
-    demands = {row["Product"]: row["Demand"] for _, row in product_data.iterrows()}
-    min_qualities = {
-        row["Product"]: row["MinQuality"] for _, row in product_quality_reqs.iterrows()
-    }
+        logger.info("Creating decision variables...")
 
-    # Create a dictionary for yields and qualities
-    yields = {}
-    qualities = {}
-    for _, row in crude_product_yields.iterrows():
-        crude, product = row["Crude"], row["Product"]
-        yields[(crude, product)] = row["Yield"]
-        qualities[(crude, product)] = row["Quality"]
+        # Decision variables: units of each food
+        food_vars = {}
+        for i, food_name in enumerate(foods_df["Food"]):
+            if pd.isna(food_name) or str(food_name).strip() == "":
+                raise ValueError(
+                    f"Empty or invalid food name at row {i}. All foods must have valid names."
+                )
+            food_vars[food_name] = model.addVar(name=f"Food_{i}_{food_name}", lb=0)
 
-    # Decision variables: amount of each crude oil used
-    x = {crude: model.addVar(name=f"x_{crude}", lb=0) for crude in crudes}
+        logger.info("Setting objective function...")
 
-    # Calculated variables: amount of each product produced from each crude
-    prod_from_crude = {}
-    for crude in crudes:
-        for product in products:
-            key = (crude, product)
-            if key in yields:
-                prod_from_crude[key] = yields[key] * x[crude]
-
-    # Calculate total production per product
-    total_production = {}
-    for product in products:
-        total_production[product] = quicksum(
-            prod_from_crude.get((crude, product), 0) for crude in crudes
+        # Objective: Minimize total cost
+        model.setObjective(
+            quicksum(
+                foods_df.loc[foods_df["Food"] == food, "Cost"].iloc[0] * var
+                for food, var in food_vars.items()
+            ),
+            GRB.MINIMIZE,
         )
 
-    # Objective: Maximize profit (revenue - cost)
-    revenue = quicksum(
-        prices[product] * total_production[product] for product in products
-    )
-    cost = quicksum(costs[crude] * x[crude] for crude in crudes)
-    model.setObjective(revenue - cost, GRB.MAXIMIZE)
+        logger.info("Adding constraints...")
 
-    # Constraints:
+        # Constraints: Nutritional requirements
+        for _, req_row in requirements_df.iterrows():
+            nutrient = req_row["Nutrient"]
+            min_requirement = req_row["Minimum"]
 
-    # 1. Crude availability constraints
-    for crude in crudes:
-        model.addConstr(x[crude] <= availability[crude], name=f"avail_{crude}")
+            if pd.isna(nutrient) or str(nutrient).strip() == "":
+                raise ValueError(
+                    "Empty or invalid nutrient name found. All nutrients must have valid names."
+                )
 
-    # 2. Demand satisfaction constraints
-    for product in products:
-        model.addConstr(
-            total_production[product] >= demands[product], name=f"demand_{product}"
-        )
+            if nutrient in nutrient_cols:
+                model.addConstr(
+                    quicksum(
+                        foods_df.loc[foods_df["Food"] == food, nutrient].iloc[0] * var
+                        for food, var in food_vars.items()
+                    )
+                    >= min_requirement,
+                    name=f"{nutrient}_requirement",
+                )
+            else:
+                logger.warning(
+                    f"Nutrient '{nutrient}' not found in foods data. Skipping constraint."
+                )
 
-    # 3. Quality constraints
-    for product in products:
-        if product in min_qualities:
-            # Linearized quality constraint: sum(q_ij * y_ij * x_i) >= Q_j^min * sum(y_ij * x_i)
-            quality_numerator = quicksum(
-                qualities.get((crude, product), 0)
-                * yields.get((crude, product), 0)
-                * x[crude]
-                for crude in crudes
-                if (crude, product) in yields
+        logger.info("Solving optimization model...")
+
+        # Solve the model
+        model.optimize()
+
+        # Enhanced status checking
+        if model.status == GRB.OPTIMAL:
+            logger.info("Optimal solution found successfully")
+        elif model.status == GRB.INFEASIBLE:
+            logger.error("Problem is infeasible")
+            # Try to compute IIS (Irreducible Inconsistent Subsystem) for debugging
+            try:
+                model.computeIIS()
+                iis_constraints = []
+                for constr in model.getConstrs():
+                    if constr.IISConstr:
+                        iis_constraints.append(constr.ConstrName)
+                if iis_constraints:
+                    raise ValueError(
+                        f"Problem is infeasible. Conflicting constraints: {iis_constraints}. Try reducing requirements or adding more diverse foods."
+                    )
+                else:
+                    raise ValueError(
+                        "Problem is infeasible. The nutritional requirements cannot be met with the provided foods. Try reducing requirements or adding more foods with different nutritional profiles."
+                    )
+            except Exception as iis_error:
+                logger.warning(f"Could not compute IIS: {str(iis_error)}")
+                raise ValueError(
+                    "Problem is infeasible. The nutritional requirements cannot be met with the provided foods. Try reducing requirements or adding more diverse foods."
+                )
+        elif model.status == GRB.UNBOUNDED:
+            logger.error("Problem is unbounded")
+            raise ValueError(
+                "Problem is unbounded. This usually occurs when some foods have zero cost. Please ensure all foods have positive costs."
             )
-            model.addConstr(
-                quality_numerator >= min_qualities[product] * total_production[product],
-                name=f"quality_{product}",
+        elif model.status == GRB.TIME_LIMIT:
+            logger.error("Time limit reached")
+            raise ValueError(
+                "Solver time limit reached (60 seconds). The problem may be too complex. Try simplifying the problem or contact support."
+            )
+        elif model.status == GRB.INTERRUPTED:
+            logger.error("Solver was interrupted")
+            raise ValueError("Solver was interrupted. Please try again.")
+        elif model.status == GRB.NUMERIC:
+            logger.error("Numerical difficulties encountered")
+            raise ValueError(
+                "Numerical difficulties encountered. Try using simpler numbers or scaling your data."
+            )
+        else:
+            logger.error(f"Unexpected solver status: {model.status}")
+            raise ValueError(
+                f"Failed to find an optimal solution. Solver status: {model.status}. Please check your input data."
             )
 
-    # Solve the model
-    model.optimize()
-
-    # Check if optimal solution was found
-    if model.status != GRB.OPTIMAL:
-        raise ValueError("Failed to find an optimal solution")
+    except Exception as gurobi_error:
+        logger.error(f"Gurobi optimization error: {str(gurobi_error)}")
+        if "Gurobi" in str(type(gurobi_error)):
+            raise ValueError(
+                f"Gurobi solver error: {str(gurobi_error)}. Please check your Gurobi installation and license."
+            )
+        else:
+            raise
 
     # Extract results
-    crude_results = pd.DataFrame(
-        {
-            "Crude": crudes,
-            "Amount Used": [x[crude].X for crude in crudes],
-            "Cost": [x[crude].X * costs[crude] for crude in crudes],
-        }
-    )
+    try:
+        total_cost = model.objVal
+        logger.info(f"Optimal solution found with total cost: {total_cost:.2f}")
 
-    # Calculate production results
-    prod_results = []
-    for product in products:
-        prod_amount = sum(
-            prod_from_crude.get((crude, product), 0).getValue()
-            for crude in crudes
-            if (crude, product) in prod_from_crude
+        # Create results dataframe
+        result_rows = []
+        for food_name, var in food_vars.items():
+            try:
+                food_row = foods_df[foods_df["Food"] == food_name].iloc[0]
+                amount = var.X
+
+                result_row = {
+                    "Food": food_name,
+                    "Units": amount,
+                    "Cost": food_row["Cost"] * amount,
+                }
+
+                # Add nutrient contributions
+                for nutrient in nutrient_cols:
+                    result_row[nutrient] = food_row[nutrient] * amount
+
+                result_rows.append(result_row)
+            except Exception as extract_error:
+                logger.error(
+                    f"Error extracting results for food '{food_name}': {str(extract_error)}"
+                )
+                raise ValueError(
+                    f"Error processing results for food '{food_name}': {str(extract_error)}"
+                )
+
+        result_df = pd.DataFrame(result_rows)
+
+        # Validate results
+        if result_df.empty:
+            raise ValueError(
+                "No results generated. This is unexpected after finding an optimal solution."
+            )
+
+        # Check if any solution violates non-negativity (shouldn't happen, but good to check)
+        if (result_df["Units"] < -1e-6).any():
+            negative_foods = result_df[result_df["Units"] < -1e-6]["Food"].tolist()
+            logger.warning(
+                f"Negative amounts found for foods (numerical error): {negative_foods}"
+            )
+            # Clamp negative values to zero
+            result_df["Units"] = result_df["Units"].clip(lower=0)
+
+    except Exception as result_error:
+        logger.error(f"Error extracting optimization results: {str(result_error)}")
+        raise ValueError(
+            f"Failed to extract optimization results: {str(result_error)}"
+        )  # Create flexible visualizations
+    try:
+        fig, axs = plt.subplots(2, 2, figsize=(14, 10))
+        fig.suptitle("Diet Problem Optimization Results", fontsize=16, y=1.02)
+
+        # Plot 1: Food Units - only show foods with positive amounts
+        foods_with_amounts = result_df[result_df["Units"] > 0.001]
+        if not foods_with_amounts.empty:
+            colors = plt.cm.Set3(range(len(foods_with_amounts)))
+            axs[0, 0].bar(
+                foods_with_amounts["Food"], foods_with_amounts["Units"], color=colors
+            )
+            axs[0, 0].set_title("Optimal Food Quantities")
+            axs[0, 0].set_ylabel("Units")
+            axs[0, 0].tick_params(axis="x", rotation=45)
+        else:
+            axs[0, 0].text(
+                0.5,
+                0.5,
+                "No foods selected\n(all amounts are zero)",
+                ha="center",
+                va="center",
+                transform=axs[0, 0].transAxes,
+            )
+            axs[0, 0].set_title("Optimal Food Quantities")
+
+        # Plot 2: Cost Breakdown
+        if not foods_with_amounts.empty:
+            axs[0, 1].bar(
+                foods_with_amounts["Food"], foods_with_amounts["Cost"], color=colors
+            )
+            axs[0, 1].set_title("Cost per Food Type")
+            axs[0, 1].set_ylabel("Cost ($)")
+            axs[0, 1].tick_params(axis="x", rotation=45)
+        else:
+            axs[0, 1].text(
+                0.5,
+                0.5,
+                "No costs to display",
+                ha="center",
+                va="center",
+                transform=axs[0, 1].transAxes,
+            )
+            axs[0, 1].set_title("Cost per Food Type")
+
+        # Plot 3: Nutritional Requirements vs Achieved
+        achieved_nutrients = {}
+        for nutrient in nutrient_cols:
+            achieved_nutrients[nutrient] = result_df[nutrient].sum()
+
+        requirements_dict = dict(
+            zip(requirements_df["Nutrient"], requirements_df["Minimum"])
         )
-        revenue = prod_amount * prices[product]
-        # Calculate average quality
-        quality_numerator = sum(
-            qualities.get((crude, product), 0)
-            * prod_from_crude.get((crude, product), 0).getValue()
-            for crude in crudes
-            if (crude, product) in prod_from_crude
+
+        nutrients = list(nutrient_cols)
+        requirements = [requirements_dict.get(nut, 0) for nut in nutrients]
+        achieved = [achieved_nutrients.get(nut, 0) for nut in nutrients]
+
+        if nutrients:
+            x_pos = range(len(nutrients))
+            width = 0.35
+            axs[1, 0].bar(
+                [i - width / 2 for i in x_pos],
+                requirements,
+                width,
+                label="Required",
+                color="red",
+                alpha=0.7,
+            )
+            axs[1, 0].bar(
+                [i + width / 2 for i in x_pos],
+                achieved,
+                width,
+                label="Achieved",
+                color="green",
+                alpha=0.7,
+            )
+            axs[1, 0].set_title("Nutritional Requirements vs Achieved")
+            axs[1, 0].set_ylabel("Units")
+            axs[1, 0].set_xticks(x_pos)
+            axs[1, 0].set_xticklabels(nutrients, rotation=45)
+            axs[1, 0].legend()
+        else:
+            axs[1, 0].text(
+                0.5,
+                0.5,
+                "No nutrients to display",
+                ha="center",
+                va="center",
+                transform=axs[1, 0].transAxes,
+            )
+            axs[1, 0].set_title("Nutritional Requirements vs Achieved")
+
+        # Plot 4: Summary Information
+        summary_data = [("Total Cost", total_cost)]
+        for nutrient in nutrient_cols:
+            summary_data.append(
+                (f"Total {nutrient}", achieved_nutrients.get(nutrient, 0))
+            )
+
+        if summary_data:
+            summary_labels, summary_values = zip(*summary_data)
+            colors_summary = plt.cm.viridis(range(len(summary_data)))
+
+            bars = axs[1, 1].bar(summary_labels, summary_values, color=colors_summary)
+            axs[1, 1].set_title("Diet Summary")
+            axs[1, 1].set_ylabel("Value")
+
+            # Add value labels on bars
+            for bar, value in zip(bars, summary_values):
+                height = bar.get_height()
+                axs[1, 1].text(
+                    bar.get_x() + bar.get_width() / 2.0,
+                    height + max(summary_values) * 0.01,
+                    f"{value:.2f}",
+                    ha="center",
+                    va="bottom",
+                    fontsize=8,
+                )
+            axs[1, 1].tick_params(axis="x", rotation=45)
+        else:
+            axs[1, 1].text(
+                0.5,
+                0.5,
+                "No summary data to display",
+                ha="center",
+                va="center",
+                transform=axs[1, 1].transAxes,
+            )
+            axs[1, 1].set_title("Diet Summary")
+
+        fig.tight_layout()
+
+        logger.info("Visualization created successfully")
+
+    except Exception as plot_error:
+        logger.error(f"Error creating visualization: {str(plot_error)}")
+        # Create a simple fallback plot
+        fig, ax = plt.subplots(1, 1, figsize=(8, 6))
+        ax.text(
+            0.5,
+            0.5,
+            f"Visualization Error\nOptimal Cost: ${total_cost:.2f}\nSee results table for details",
+            ha="center",
+            va="center",
+            transform=ax.transAxes,
+            fontsize=12,
         )
-        avg_quality = quality_numerator / prod_amount if prod_amount > 0 else 0
+        ax.set_title("Diet Problem Results")
+        ax.axis("off")
 
-        prod_results.append(
-            {
-                "Product": product,
-                "Amount Produced": prod_amount,
-                "Revenue": revenue,
-                "Average Quality": avg_quality,
-                "Min Quality Required": min_qualities.get(product, "N/A"),
-            }
-        )
-
-    product_results_df = pd.DataFrame(prod_results)
-
-    # Create visualizations
-    fig, axs = plt.subplots(2, 2, figsize=(14, 10))
-    fig.suptitle("Oil Refinery Optimization Results", fontsize=16, y=1.02)
-
-    # Plot 1: Crude Oil Usage
-    axs[0, 0].bar(crude_results["Crude"], crude_results["Amount Used"])
-    axs[0, 0].set_title("Crude Oil Usage")
-    axs[0, 0].set_ylabel("Amount (Liters)")
-    plt.setp(axs[0, 0].get_xticklabels(), rotation=45, ha="right")
-
-    # Plot 2: Product Production
-    axs[0, 1].bar(product_results_df["Product"], product_results_df["Amount Produced"])
-    axs[0, 1].set_title("Product Production")
-    axs[0, 1].set_ylabel("Amount (Liters)")
-    plt.setp(axs[0, 1].get_xticklabels(), rotation=45, ha="right")
-
-    # Plot 3: Profit/Cost Breakdown
-    revenue_total = product_results_df["Revenue"].sum()
-    cost_total = crude_results["Cost"].sum()
-    profit = revenue_total - cost_total
-    axs[1, 0].bar(
-        ["Revenue", "Cost", "Profit"],
-        [revenue_total, cost_total, profit],
-        color=["green", "red", "blue"],
-    )
-    axs[1, 0].set_title("Financial Summary")
-    axs[1, 0].set_ylabel("Amount ($)")
-
-    # Plot 4: Quality vs Requirements
-    products = product_results_df["Product"]
-    achieved_quality = product_results_df["Average Quality"]
-    required_quality = pd.to_numeric(
-        product_results_df["Min Quality Required"], errors="coerce"
-    )
-
-    x = range(len(products))
-    width = 0.35
-    axs[1, 1].bar(
-        [i - width / 2 for i in x], achieved_quality, width, label="Achieved Quality"
-    )
-    axs[1, 1].bar(
-        [i + width / 2 for i in x], required_quality, width, label="Required Quality"
-    )
-    axs[1, 1].set_title("Product Quality Analysis")
-    axs[1, 1].set_xticks(x)
-    axs[1, 1].set_xticklabels(products)
-    axs[1, 1].set_ylabel("Quality")
-    axs[1, 1].legend()
-    plt.setp(axs[1, 1].get_xticklabels(), rotation=45, ha="right")
-
-    fig.tight_layout()
-
-    # Combine results for return
-    combined_results = {
-        "Crude Usage": crude_results,
-        "Product Production": product_results_df,
-        "Total Profit": profit,
-    }
-
-    # Convert to a results dataframe with all key information
-    result_summary = pd.DataFrame(
-        {
-            "Category": ["Total Revenue", "Total Cost", "Total Profit"],
-            "Value": [revenue_total, cost_total, profit],
-        }
-    )
-
-    return product_results_df, fig
+    return result_df, fig
 
 
 def _validate_plne_input(data, vehicle_capacity, num_vehicles):

@@ -3,10 +3,10 @@ import os
 import gradio as gr
 import pandas as pd
 
-from models.gurobi_models import solve_plne, solve_refinery_optimization
-from ui.gradio_sections import oil_refinery_tab, project_info_tab, vehicle_routing_tab
+from models.gurobi_models import solve_diet_problem, solve_plne
+from ui.gradio_sections import diet_problem_tab, project_info_tab, vehicle_routing_tab
 
-# Mock Data
+# Mock Data for Vehicle Routing Problem
 plne_df = pd.DataFrame(
     [
         {"Node": 0, "X": 50, "Y": 50, "Demand": 0},
@@ -18,91 +18,16 @@ plne_df = pd.DataFrame(
     ]
 )
 
-# Oil Refinery Optimization Mock Data
-crude_df = pd.DataFrame(
-    [
-        {"Crude": "Light Crude", "Cost": 60, "Availability": 10000},
-        {"Crude": "Medium Crude", "Cost": 50, "Availability": 15000},
-        {"Crude": "Heavy Crude", "Cost": 45, "Availability": 12000},
-    ]
-)
-
-product_df = pd.DataFrame(
-    [
-        {"Product": "Premium Gasoline", "Price": 90, "Demand": 5000},
-        {"Product": "Regular Gasoline", "Price": 80, "Demand": 7000},
-        {"Product": "Diesel", "Price": 75, "Demand": 8000},
-    ]
-)
-
-yields_df = pd.DataFrame(
-    [
-        # Light Crude yields
-        {
-            "Crude": "Light Crude",
-            "Product": "Premium Gasoline",
-            "Yield": 0.4,
-            "Quality": 95,
-        },
-        {
-            "Crude": "Light Crude",
-            "Product": "Regular Gasoline",
-            "Yield": 0.3,
-            "Quality": 90,
-        },
-        {"Crude": "Light Crude", "Product": "Diesel", "Yield": 0.2, "Quality": 85},
-        # Medium Crude yields
-        {
-            "Crude": "Medium Crude",
-            "Product": "Premium Gasoline",
-            "Yield": 0.3,
-            "Quality": 85,
-        },
-        {
-            "Crude": "Medium Crude",
-            "Product": "Regular Gasoline",
-            "Yield": 0.4,
-            "Quality": 80,
-        },
-        {"Crude": "Medium Crude", "Product": "Diesel", "Yield": 0.3, "Quality": 80},
-        # Heavy Crude yields
-        {
-            "Crude": "Heavy Crude",
-            "Product": "Premium Gasoline",
-            "Yield": 0.1,
-            "Quality": 75,
-        },
-        {
-            "Crude": "Heavy Crude",
-            "Product": "Regular Gasoline",
-            "Yield": 0.3,
-            "Quality": 70,
-        },
-        {"Crude": "Heavy Crude", "Product": "Diesel", "Yield": 0.5, "Quality": 75},
-    ]
-)
-
-quality_reqs_df = pd.DataFrame(
-    [
-        {"Product": "Premium Gasoline", "MinQuality": 90},
-        {"Product": "Regular Gasoline", "MinQuality": 80},
-        {"Product": "Diesel", "MinQuality": 75},
-    ]
-)
-
 # Descriptions
 plne_description = """
 ### 🚚 Capacitated Vehicle Routing Problem
 Provide node coordinates and demands, plus vehicle capacity and number of vehicles.         
 """
 
-refinery_description = """
-### ⚙️ Oil Refinery Optimization Problem
+diet_description = """
+### 🍎 Diet Problem
 
-**Scenario**
-An oil refinery wants to determine the optimal production plan for different fuel products (like diesel, premium gasoline, and regular gasoline) 
-using various crude oils. Each crude oil has different yields, costs, and qualities, and each product has its own demand, 
-quality requirements, and selling price.
+Find the optimal diet that minimizes cost while meeting nutritional requirements.
 """
 
 # Read and encode the PDF - go up one directory to find assets at project root
@@ -123,14 +48,7 @@ with gr.Blocks(title="Operations Research App") as ro_app:
     )
     with gr.Tabs():
         project_info_tab()
-        oil_refinery_tab(
-            crude_df,
-            product_df,
-            yields_df,
-            quality_reqs_df,
-            solve_refinery_optimization,
-            refinery_description,
-        )
+        diet_problem_tab(solve_diet_problem, diet_description)
         vehicle_routing_tab(plne_df, solve_plne, plne_description)
 
 if __name__ == "__main__":
