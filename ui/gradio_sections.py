@@ -4,7 +4,7 @@ import os
 import gradio as gr
 import pandas as pd
 
-import achref.src.logger as logger
+import utils.logger as logger
 
 logger = logger.get_logger(__name__)
 
@@ -24,7 +24,6 @@ def project_info_tab():
         - **Yassine Taieb** — GL3/2  
         - **Youssef Sghairi** — GL3/2  
         - **Youssef Aaridhi** — GL3/2  
-        - **Achref Ben Ammar** — GL3/1  
         ---
         # \U0001f9fe Compte Rendu
         """

@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 from gurobipy import GRB, Model, quicksum
 
-import achref.src.logger as logger
+import utils.logger as logger
 
 logger = logger.get_logger(__name__)
 
