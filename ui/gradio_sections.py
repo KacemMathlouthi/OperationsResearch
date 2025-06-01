@@ -22,7 +22,9 @@ def project_info_tab():
             """
             <style>
                 .member-card {
-                    display: inline-block;
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
                     width: 160px;
                     text-align: center;
                     margin: 10px;
@@ -35,34 +37,33 @@ def project_info_tab():
                     border: 1px solid #ccc;
                 }
                 .member-name {
-                    margin-top: 6px;
+                    margin-top: 8px;
                     font-weight: bold;
                 }
             </style>
-
             <div style="display: flex; flex-wrap: wrap; justify-content: center;">
                 <div class="member-card">
-                    <img src="https://i.imgur.com/ff50RGn.jpeg" alt="Kacem Mathlouthi">
+                    <img src="https://raw.githubusercontent.com/KacemMathlouthi/OperationsResearch/main/assets/images/kacem_mathlouthi.jpg" alt="Kacem Mathlouthi">
                     <div class="member-name">Kacem Mathlouthi</div>
                 </div>
                 <div class="member-card">
-                    <img src="URL_HERE/mohamed_amine_haouas.jpg" alt="Mohamed Amine Houas">
+                    <img src="https://raw.githubusercontent.com/KacemMathlouthi/OperationsResearch/main/assets/images/mohamed_amine_haouas.jpg" alt="Mohamed Amine Houas">
                     <div class="member-name">Mohamed Amine Houas</div>
                 </div>
                 <div class="member-card">
-                    <img src="URL_HERE/oussema_kraiem.jpg" alt="Oussema Kraiem">
+                    <img src="https://raw.githubusercontent.com/KacemMathlouthi/OperationsResearch/main/assets/images/oussema_kraiem.jpg" alt="Oussema Kraiem">
                     <div class="member-name">Oussema Kraiem</div>
                 </div>
                 <div class="member-card">
-                    <img src="URL_HERE/yassine_taieb.jpg" alt="Yassine Taieb">
+                    <img src="https://raw.githubusercontent.com/KacemMathlouthi/OperationsResearch/main/assets/images/mohamed_yassine_taieb.jpg" alt="Yassine Taieb">
                     <div class="member-name">Yassine Taieb</div>
                 </div>
                 <div class="member-card">
-                    <img src="URL_HERE/youssef_sghairi.jpg" alt="Youssef Sghairi">
+                    <img src="https://raw.githubusercontent.com/KacemMathlouthi/OperationsResearch/main/assets/images/youssef_sghairi.jpg" alt="Youssef Sghairi">
                     <div class="member-name">Youssef Sghairi</div>
                 </div>
                 <div class="member-card">
-                    <img src="URL_HERE/youssef_aridhi.jpg" alt="Youssef Aaridhi">
+                    <img src="https://raw.githubusercontent.com/KacemMathlouthi/OperationsResearch/main/assets/images/youssef_aridhi.jpg" alt="Youssef Aaridhi">
                     <div class="member-name">Youssef Aaridhi</div>
                 </div>
             </div>
