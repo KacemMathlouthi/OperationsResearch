@@ -13,20 +13,67 @@ def project_info_tab():
     with gr.Tab("\U0001f4d8 Project Info"):
         gr.Markdown(
             """
-        # \U0001f393 GL3 - 2025 - Operational Research Project
-        This application demonstrates how **Linear Programming (PL)** and **Mixed-Integer Linear Programming (PLNE)** can be applied to solve real-world optimisation problems using **Gurobi**.
-        
-        ---
-        # \U0001f465 Project Members
-        - **Kacem Mathlouthi** — GL3/2  
-        - **Mohamed Amine Houas** — GL3/1  
-        - **Oussema Kraiem** — GL3/2  
-        - **Yassine Taieb** — GL3/2  
-        - **Youssef Sghairi** — GL3/2  
-        - **Youssef Aaridhi** — GL3/2  
-        ---
-        # \U0001f9fe Compte Rendu
-        """
+            # \U0001f393 GL3 - 2025 - Operational Research Project
+            This application demonstrates how **Linear Programming (PL)** and **Mixed-Integer Linear Programming (PLNE)** can be applied to solve real-world optimisation problems using **Gurobi**.
+            """
+        )
+
+        gr.HTML(
+            """
+            <style>
+                .member-card {
+                    display: inline-block;
+                    width: 160px;
+                    text-align: center;
+                    margin: 10px;
+                }
+                .member-card img {
+                    width: 120px;
+                    height: 140px;
+                    object-fit: cover;
+                    border-radius: 8px;
+                    border: 1px solid #ccc;
+                }
+                .member-name {
+                    margin-top: 6px;
+                    font-weight: bold;
+                }
+            </style>
+
+            <div style="display: flex; flex-wrap: wrap; justify-content: center;">
+                <div class="member-card">
+                    <img src="https://i.imgur.com/ff50RGn.jpeg" alt="Kacem Mathlouthi">
+                    <div class="member-name">Kacem Mathlouthi</div>
+                </div>
+                <div class="member-card">
+                    <img src="URL_HERE/mohamed_amine_haouas.jpg" alt="Mohamed Amine Houas">
+                    <div class="member-name">Mohamed Amine Houas</div>
+                </div>
+                <div class="member-card">
+                    <img src="URL_HERE/oussema_kraiem.jpg" alt="Oussema Kraiem">
+                    <div class="member-name">Oussema Kraiem</div>
+                </div>
+                <div class="member-card">
+                    <img src="URL_HERE/yassine_taieb.jpg" alt="Yassine Taieb">
+                    <div class="member-name">Yassine Taieb</div>
+                </div>
+                <div class="member-card">
+                    <img src="URL_HERE/youssef_sghairi.jpg" alt="Youssef Sghairi">
+                    <div class="member-name">Youssef Sghairi</div>
+                </div>
+                <div class="member-card">
+                    <img src="URL_HERE/youssef_aridhi.jpg" alt="Youssef Aaridhi">
+                    <div class="member-name">Youssef Aaridhi</div>
+                </div>
+            </div>
+            """
+        )
+
+        gr.Markdown(
+            """
+            ---
+            # \U0001f9fe Compte Rendu
+            """
         )
         pdf_path = os.path.join(
             os.path.dirname(os.path.dirname(__file__)), "assets", "compte_rendu.pdf"
